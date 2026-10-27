@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -269,7 +269,8 @@
         { entity: "binary_sensor.living_room_smoke", name: "Rauchmelder" },
         { entity: "switch.living_room_projector", name: "Beamer", icon: "mdi:projector", color: "#5aa9e6",
           power: "sensor." + STRIP + "_output_1_power", energy: "sensor." + STRIP + "_output_1_energy" },
-        { entity: "cover.living_room_screen", name: "Leinwand", icon: "mdi:projector-screen", color: "#926bc7",
+        { entity: "cover.living_room_screen", name: "Leinwand", color: "#926bc7",
+          states: { open: { icon: "mdi:projector-screen-off" }, closed: { icon: "mdi:projector-screen" } },
           power: "sensor.living_room_screen_power", energy: "sensor.living_room_screen_energy" },
         { entity: "switch." + STRIP + "_output_2", name: "Switch 2", icon: "mdi:nintendo-switch", color: "#e8663d",
           power: "sensor." + STRIP + "_output_2_power", energy: "sensor." + STRIP + "_output_2_energy" },

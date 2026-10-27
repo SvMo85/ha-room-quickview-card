@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Room Quickview Card
  *
  * Raumkarte fuer Home Assistant: Raumsymbol, Name, Temperatur, Luftfeuchte und
@@ -181,8 +181,23 @@ function bewerteGeraet(hass, geraet) {
     return Object.assign(basis, mitZustand(false), { art: "status", symbol, text });
   }
 
-  // Eigene Regel je Zustand aus "states:" geht der Erkennung nach Domaene vor
   const regel = geraet.states && geraet.states[s.state];
+
+  // Ein offener Rollladen ist nicht "an": er bleibt grau und zeigt seine Stellung als Fuellstand.
+  // Eine Regel aus "states:" ersetzt hier nur Symbol und Text, damit Schalter und Regler bleiben.
+  if (domaene === "cover") {
+    const position = s.attributes.current_position;
+    const offen = s.state !== "closed";
+    const zustand = (regel && regel.text) || text;
+    const mitPosition = offen && typeof position === "number" ? zustand + " · " + position + " %" : zustand;
+    return Object.assign(basis, {
+      art: "rollladen", an: offen, ton: "aus", farbe: FARBEN.aus,
+      symbol: (regel && regel.icon) || symbol, text: mitPosition, position,
+      geschlossen: typeof position === "number" ? 100 - position : offen ? 0 : 100
+    });
+  }
+
+  // Eigene Regel je Zustand aus "states:" geht der Erkennung nach Domaene vor
   if (regel) {
     const farbe = regelfarbe(regel.color);
     return Object.assign(basis, {
@@ -197,17 +212,6 @@ function bewerteGeraet(hass, geraet) {
 
   if (SCHALTBARE_DOMAENEN.includes(domaene)) {
     return Object.assign(basis, mitZustand(s.state === "on"), { art: "schalter", symbol, text });
-  }
-
-  // Ein offener Rollladen ist nicht "an": er bleibt grau und zeigt seine Stellung als Fuellstand
-  if (domaene === "cover") {
-    const position = s.attributes.current_position;
-    const offen = s.state !== "closed";
-    const mitPosition = offen && typeof position === "number" ? text + " · " + position + " %" : text;
-    return Object.assign(basis, {
-      art: "rollladen", an: offen, ton: "aus", farbe: FARBEN.aus, symbol, text: mitPosition, position,
-      geschlossen: typeof position === "number" ? 100 - position : offen ? 0 : 100
-    });
   }
 
   // Ein Melder ist gruen, solange alles in Ordnung ist, und rot bei Alarm
