@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -122,11 +122,11 @@
     zustand("sensor." + STRIP + "_output_0_power", "5.1", { unit_of_measurement: "W" }),
 
     zustand("binary_sensor.shed_door", "off", { device_class: "door", friendly_name: "Tür Schuppen" }),
-    zustand("binary_sensor.shed_smoke", "off", { device_class: "smoke", friendly_name: "Rauchmelder Schuppen" }),
+    zustand("binary_sensor.shed_smoke", "off", { friendly_name: "Rauchmelder Schuppen" }),
     zustand("switch.shed_camera_sleep", "off", { friendly_name: "Kamera" }),
     zustand("sensor.shed_washer_power", "2.1", { unit_of_measurement: "W" }),
 
-    zustand("sensor.toilet_temperature", "20.3", { unit_of_measurement: "°C" }),
+    zustand("climate.toilet_thermostat", "auto", { current_temperature: 20.3, temperature: 20.5, friendly_name: "Thermostat WC" }),
 
     zustand("sensor.basement_temperature", "12.4", { unit_of_measurement: "°C" }),
     zustand("sensor.basement_humidity", "64", { unit_of_measurement: "%" }),
@@ -283,7 +283,7 @@
       devices: [
         { entity: "binary_sensor.shed_door", name: "Tür" },
         { entity: "switch.shed_camera_sleep", name: "Kamera-Ruhemodus", icon: "mdi:cctv-off" },
-        { entity: "binary_sensor.shed_smoke", name: "Rauchmelder" },
+        { entity: "binary_sensor.shed_smoke", name: "Rauchmelder", icon: "mdi:smoke-detector-variant", alarm: true },
         { name: "Waschmaschine", icon: "mdi:washing-machine", color: "#9fb3c4",
           power: "sensor.shed_washer_power", energy: "sensor.shed_washer_energy" }
       ] } },
@@ -303,7 +303,7 @@
         { type: "history-graph", title: "Luftfeuchte 12 h", entity: "sensor.basement_humidity" },
         { type: "entities", title: "Schwellen", entity: "switch.basement_dehumidifier" }
       ] } },
-    { farbe: "rgba(96, 125, 139, 0.30)", config: { name: "WC", icon: "mdi:toilet", temperature: "sensor.toilet_temperature" } }
+    { farbe: "rgba(96, 125, 139, 0.30)", config: { name: "WC", icon: "mdi:toilet", temperature: "climate.toilet_thermostat" } }
   ];
 
   const raster = document.getElementById("raster");

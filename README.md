@@ -78,8 +78,8 @@ devices:
 |---|---|---|
 | `name` | ja | Raumname |
 | `icon` | | Raumsymbol, Standard `mdi:home` |
-| `temperature` | | Sensor für die Temperatur |
-| `humidity` | | Sensor für die Luftfeuchte |
+| `temperature` | | Sensor für die Temperatur, oder ein Thermostat (`climate.…`), dann gilt dessen `current_temperature` |
+| `humidity` | | Sensor für die Luftfeuchte, oder ein Thermostat, dann gilt dessen `current_humidity` |
 | `devices` | | Liste der Geräte, siehe unten |
 | `cards` | | Liste beliebiger Home-Assistant-Karten, die im Pop-up zwischen Geräten und Verläufen erscheinen |
 
@@ -100,6 +100,7 @@ Die Leistung im Kartenkopf ist die Summe aller `power`-Sensoren der Geräte.
 | `show_when` | Gerät nur zeigen, wenn eine andere Entität aktiv ist: als Entitäts-ID oder als `{ entity, state }` mit einem Zustand oder einer Liste |
 | `states` | Farbe und Symbol je Zustand, zum Beispiel für Textsensoren; Farben `green`, `red`, `yellow`, `grey` oder ein Farbwert. `grey` gilt als „aus“. Rot ist hier nur eine Farbe und löst keinen Alarm aus |
 | `attribute` | Attribut der Entität, das im Pop-up unter dem Zustand steht |
+| `alarm` | `true` behandelt das Gerät als Melder: grün ohne Gefahr, rot pulsierend bei `on`. Binärsensoren mit Geräteklasse wie `smoke` oder `moisture` sind das von selbst |
 
 Beispiel für einen Textsensor mit eigenen Zuständen:
 

@@ -12,7 +12,7 @@
  * Dashboard-Container eine fest positionierte Ebene sonst abschneiden.
  */
 
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.2.0";
 
 console.info(
   `%c ROOM-SUMMARY-CARD %c ${CARD_VERSION} `,
@@ -85,10 +85,12 @@ function esc(text) {
     .replace(/"/g, "&quot;");
 }
 
-function zahlAus(hass, entityId) {
+// Zahl aus dem Zustand; bei einem Thermostat aus dem genannten Attribut, etwa current_temperature
+function zahlAus(hass, entityId, klimaAttribut) {
   const s = entityId ? hass.states[entityId] : undefined;
   if (!s || OHNE_WERT.includes(s.state)) return null;
-  const n = parseFloat(s.state);
+  const roh = klimaAttribut && domaeneVon(entityId) === "climate" ? s.attributes[klimaAttribut] : s.state;
+  const n = parseFloat(roh);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -205,7 +207,7 @@ function bewerteGeraet(hass, geraet) {
   }
 
   // Ein Melder ist gruen, solange alles in Ordnung ist, und rot bei Alarm
-  if (domaene === "binary_sensor" && ALARMKLASSEN.includes(s.attributes.device_class)) {
+  if (geraet.alarm === true || (domaene === "binary_sensor" && ALARMKLASSEN.includes(s.attributes.device_class))) {
     const alarm = s.state === "on";
     return Object.assign(basis, {
       art: "status", an: true, ton: alarm ? "alarm" : "gut", farbe: alarm ? FARBEN.alarm : FARBEN.ok, symbol, text
@@ -665,8 +667,8 @@ class RoomSummaryCard extends HTMLElement {
 
     const bewertungen = c.devices.map((g) => bewerteGeraet(hass, g));
     const werte = [];
-    const temperatur = zahlAus(hass, c.temperature);
-    const feuchte = zahlAus(hass, c.humidity);
+    const temperatur = zahlAus(hass, c.temperature, "current_temperature");
+    const feuchte = zahlAus(hass, c.humidity, "current_humidity");
     const leistungen = bewertungen.map((b) => b.leistung).filter((w) => w !== null);
     if (temperatur !== null) {
       werte.push('<span><ha-icon icon="mdi:thermometer"></ha-icon>' + zahlText(hass, temperatur, 1) + " °C</span>");
