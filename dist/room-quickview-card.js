@@ -14,7 +14,7 @@
  * eingebettete Karten Theme und Kontext der Oberflaeche.
  */
 
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.3.0";
 
 console.info(
   `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
@@ -523,6 +523,11 @@ const POPUPSTILE = `
   .liste { display: flex; flex-direction: column; gap: 8px; }
   .karten, .verlaeufe { display: flex; flex-direction: column; gap: 10px; }
   .karten:empty, .verlaeufe:empty { display: none; }
+  .eintrag { display: flex; flex-direction: column; gap: 8px; }
+  .eintrag[hidden] { display: none; }
+  /* Karten eines Geraets stehen eingerueckt unter seiner Zeile */
+  .geraetkarten { display: flex; flex-direction: column; gap: 8px; margin-left: 22px; }
+  .geraetkarten:empty { display: none; }
 
   .geraet {
     display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 8px 12px;
@@ -615,6 +620,9 @@ class RoomQuickviewCard extends HTMLElement {
       throw new Error("room-quickview-card: cards muss eine Liste sein");
     }
     const geraete = (config.devices || []).map((g) => (typeof g === "string" ? { entity: g } : g));
+    if (geraete.some((g) => g.cards !== undefined && !Array.isArray(g.cards))) {
+      throw new Error("room-quickview-card: cards eines Geraets muss eine Liste sein");
+    }
     this._config = Object.assign({}, config, { devices: geraete });
     this._signatur = "";
     if (this._hass) this._aktualisieren();
@@ -858,7 +866,7 @@ class RoomQuickviewCardPopup extends HTMLElement {
     this._zeichnen();
   }
 
-  // Das Geruest entsteht einmal; danach werden nur Geraeteliste und Verlaeufe erneuert,
+  // Das Geruest entsteht einmal; danach werden nur die Geraetezeilen und die Verlaeufe erneuert,
   // damit eingebettete Karten bestehen bleiben und ihre Daten nicht neu laden
   _zeichnen() {
     const hass = this._hass;
@@ -866,21 +874,28 @@ class RoomQuickviewCardPopup extends HTMLElement {
     if (!hass || !c) return;
     if (!this.shadowRoot.querySelector(".popup")) this._geruestBauen();
 
-    this.shadowRoot.querySelector(".liste").innerHTML = c.devices
-      .map((g, i) => (istSichtbar(hass, g) ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : ""))
-      .join("");
+    c.devices.forEach((g, i) => {
+      const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
+      const sichtbar = istSichtbar(hass, g);
+      eintrag.hidden = !sichtbar;
+      eintrag.querySelector(".zeile").innerHTML = sichtbar ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : "";
+    });
     this.shadowRoot.querySelector(".verlaeufe").innerHTML = this._verlaeufeHtml();
     this._diagrammeVerdrahten();
   }
 
+  // Je Geraet ein Eintrag aus Zeile und den Karten des Geraets; nur die Zeile wird neu gezeichnet
   _geruestBauen() {
+    const eintraege = this._config.devices
+      .map((_, i) => '<div class="eintrag" data-index="' + i + '"><div class="zeile"></div><div class="geraetkarten"></div></div>')
+      .join("");
     this.shadowRoot.innerHTML =
       "<style>" + GEMEINSAME_STILE + POPUPSTILE + "</style>" +
       '<div class="abdunklung">' +
         '<div class="popup" role="dialog" aria-modal="true" aria-labelledby="titel">' +
           '<div class="popupkopf"><h2 id="titel">' + esc(this._config.name) + '</h2>' +
             '<button type="button" class="schliessen">Schließen</button></div>' +
-          '<div class="liste"></div>' +
+          '<div class="liste">' + eintraege + "</div>" +
           '<div class="karten"></div>' +
           '<div class="verlaeufe"></div>' +
         "</div>" +
@@ -888,22 +903,33 @@ class RoomQuickviewCardPopup extends HTMLElement {
     this._kartenEinsetzen();
   }
 
-  // Zusatzkarten aus "cards:" erzeugt Home Assistant selbst, damit jede bekannte Karte geht
+  // Zusatzkarten aus "cards:" des Raums und der Geraete erzeugt Home Assistant selbst,
+  // damit jede bekannte Karte geht
   async _kartenEinsetzen() {
-    const konfigurationen = this._config.cards || [];
-    if (!konfigurationen.length) return;
-    const ablage = this.shadowRoot.querySelector(".karten");
+    const ablagen = [{ ablage: this.shadowRoot.querySelector(".karten"), konfigurationen: this._config.cards || [] }];
+    this._config.devices.forEach((g, i) => {
+      ablagen.push({
+        ablage: this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"] .geraetkarten'),
+        konfigurationen: g.cards || []
+      });
+    });
+    const gefuellt = ablagen.filter((a) => a.konfigurationen.length);
+    if (!gefuellt.length) return;
     if (typeof window.loadCardHelpers !== "function") {
-      ablage.innerHTML = '<div class="hinweis">Zusatzkarten nicht verfügbar</div>';
+      gefuellt.forEach((a) => { a.ablage.innerHTML = '<div class="hinweis">Zusatzkarten nicht verfügbar</div>'; });
       return;
     }
     const helfer = await window.loadCardHelpers();
-    this._karten = konfigurationen.map((k) => {
-      const karte = helfer.createCardElement(k);
-      karte.hass = this._hass;
-      return karte;
+    this._karten = [];
+    gefuellt.forEach((a) => {
+      const karten = a.konfigurationen.map((k) => {
+        const karte = helfer.createCardElement(k);
+        karte.hass = this._hass;
+        return karte;
+      });
+      this._karten.push(...karten);
+      a.ablage.append(...karten);
     });
-    ablage.append(...this._karten);
   }
 
   /* ------------------------------------------------------- Tooltips */

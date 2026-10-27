@@ -297,12 +297,16 @@
             "Lüften": { color: "green", icon: "mdi:curtains" },
             "Nicht Lüften": { color: "red", icon: "mdi:curtains-closed" },
             "Trocken": { color: "red", icon: "mdi:curtains-closed" }
-          } },
-        { entity: "switch.basement_dehumidifier", name: "Luftentfeuchter", icon: "mdi:air-humidifier", color: "#4caf50", power: "sensor.basement_dehumidifier_power" }
+          },
+          cards: [{ type: "history-graph", title: "Wasserdampf 24 h", entity: "sensor.basement_ventilation" }] },
+        { entity: "switch.basement_dehumidifier", name: "Luftentfeuchter", icon: "mdi:air-humidifier", color: "#4caf50", power: "sensor.basement_dehumidifier_power",
+          cards: [
+            { type: "tile", title: "Entfeuchter an", entity: "switch.basement_dehumidifier" },
+            { type: "tile", title: "Entfeuchter aus", entity: "switch.basement_dehumidifier" }
+          ] }
       ],
       cards: [
-        { type: "history-graph", title: "Luftfeuchte 12 h", entity: "sensor.basement_humidity" },
-        { type: "entities", title: "Schwellen", entity: "switch.basement_dehumidifier" }
+        { type: "history-graph", title: "Luftfeuchte 12 h", entity: "sensor.basement_humidity" }
       ] } },
     { farbe: "rgba(96, 125, 139, 0.30)", config: { name: "WC", icon: "mdi:toilet", temperature: "climate.toilet_thermostat" } }
   ];
