@@ -98,7 +98,7 @@ Die Leistung im Kartenkopf ist die Summe aller `power`-Sensoren der Geräte.
 | `chip` | `false` blendet das Symbol auf der Karte aus; Standard: sichtbar, wenn `entity` gesetzt ist |
 | `graph` | `false` nimmt das Gerät aus dem Diagramm „Leistung“ heraus |
 | `show_when` | Gerät nur zeigen, wenn eine andere Entität aktiv ist: als Entitäts-ID oder als `{ entity, state }` mit einem Zustand oder einer Liste |
-| `states` | Farbe und Symbol je Zustand, zum Beispiel für Textsensoren; Farben `green`, `red`, `yellow`, `grey` oder ein Farbwert. `grey` gilt als „aus“. Rot ist hier nur eine Farbe und löst keinen Alarm aus |
+| `states` | Farbe, Symbol und angezeigter Text je Zustand (`color`, `icon`, `text`), zum Beispiel für Textsensoren oder einen umgekehrt arbeitenden Schalter; Farben `green`, `red`, `yellow`, `grey` oder ein Farbwert. `grey` gilt als „aus“. Rot ist hier nur eine Farbe und löst keinen Alarm aus |
 | `attribute` | Attribut der Entität, das im Pop-up unter dem Zustand steht |
 | `alarm` | `true` behandelt das Gerät als Melder: grün ohne Gefahr, rot pulsierend bei `on`. Binärsensoren mit Geräteklasse wie `smoke` oder `moisture` sind das von selbst |
 

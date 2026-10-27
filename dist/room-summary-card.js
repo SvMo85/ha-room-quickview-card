@@ -8,8 +8,10 @@
  * ein Geraet ausgehen. Jeder Tipp oeffnet ein Pop-up; ein Tipp auf ein Symbol
  * hebt dort das zugehoerige Geraet hervor. Geschaltet wird erst im Pop-up.
  *
- * Das Pop-up haengt sich beim Oeffnen an document.body, weil manche
- * Dashboard-Container eine fest positionierte Ebene sonst abschneiden.
+ * Das Pop-up haengt sich beim Oeffnen in den Shadow Root von home-assistant,
+ * wie die Dialoge von Home Assistant selbst: Dashboard-Container wuerden eine
+ * fest positionierte Ebene sonst abschneiden, und nur dort erreichen
+ * eingebettete Karten Theme und Kontext der Oberflaeche.
  */
 
 const CARD_VERSION = "0.2.0";
@@ -34,6 +36,8 @@ const FARBEN = {
 const ALARMKLASSEN = ["smoke", "gas", "carbon_monoxide", "moisture", "heat", "safety", "problem", "tamper"];
 const SCHALTBARE_DOMAENEN = ["switch", "light", "fan", "input_boolean", "siren"];
 const OHNE_WERT = ["unavailable", "unknown"];
+// Ereignisse, mit denen Karten Home Assistant um Detailfenster, Dialoge oder Hinweise bitten
+const WEITERZUREICHENDE_EREIGNISSE = ["hass-more-info", "show-dialog", "hass-notification"];
 const AKTIVE_ZUSTAENDE = ["on", "open", "opening", "closing", "playing", "paused", "home", "recording", "streaming"];
 
 const DOMAENENSYMBOLE = {
@@ -187,7 +191,7 @@ function bewerteGeraet(hass, geraet) {
       ton: farbe !== null ? "aktiv" : "aus",
       farbe: farbe || FARBEN.aus,
       symbol: regel.icon || symbol,
-      text
+      text: regel.text || text
     });
   }
 
@@ -740,9 +744,13 @@ class RoomSummaryCard extends HTMLElement {
       this._popup = null;
       const raum = this.shadowRoot.querySelector(".raum");
       if (raum) raum.focus();
-    });
+    }, this);
     popup.hass = this._hass;
-    document.body.appendChild(popup);
+    // Im Shadow Root von home-assistant oeffnet Home Assistant auch seine eigenen Dialoge.
+    // Nur dort erreichen eingebettete Karten Theme und Kontext der Oberflaeche; ohne Home
+    // Assistant, etwa auf der Testseite, bleibt document.body.
+    const wirt = document.querySelector("home-assistant");
+    (wirt && wirt.shadowRoot ? wirt.shadowRoot : document.body).appendChild(popup);
     this._popup = popup;
   }
 
@@ -764,6 +772,9 @@ class RoomSummaryCardPopup extends HTMLElement {
     };
     this.shadowRoot.addEventListener("click", (e) => this._beiKlick(e));
     this.shadowRoot.addEventListener("change", (e) => this._beiAenderung(e));
+    WEITERZUREICHENDE_EREIGNISSE.forEach((typ) => {
+      this.shadowRoot.addEventListener(typ, (e) => this._weiterreichen(e));
+    });
     // Waehrend der Regler gezogen wird, darf ein Neuzeichnen ihn nicht zuruecksetzen
     this.shadowRoot.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("regler")) this._zieht = true;
@@ -775,10 +786,23 @@ class RoomSummaryCardPopup extends HTMLElement {
     };
   }
 
-  konfigurieren(config, markiert, beimSchliessen) {
+  konfigurieren(config, markiert, beimSchliessen, quelle) {
     this._config = config;
     this._markiert = markiert;
     this._beimSchliessen = beimSchliessen;
+    this._quelle = quelle;
+  }
+
+  // Ereignisse wie hass-more-info gehen ueber die Raumkarte weiter, damit Home Assistant sie
+  // auch dann erreicht, wenn das Pop-up ausnahmsweise an document.body haengt.
+  // Oeffnet sich ein Detailfenster, schliesst das Pop-up, sonst laege es darueber.
+  _weiterreichen(e) {
+    const anDerSeite = this.getRootNode() === document;
+    if (anDerSeite && this._quelle && this._quelle.isConnected) {
+      e.stopPropagation();
+      this._quelle.dispatchEvent(new CustomEvent(e.type, { detail: e.detail, bubbles: true, composed: true }));
+    }
+    if (e.type === "hass-more-info" || e.type === "show-dialog") this.schliessen();
   }
 
   set hass(hass) {
