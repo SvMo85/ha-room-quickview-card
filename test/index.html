@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room Summary Card Test</title>
+<style>
+  /* Theme-Variablen, wie Home Assistant sie im dunklen Standardthema setzt */
+  :root {
+    --primary-text-color: #e1e1e1;
+    --secondary-text-color: #9b9b9b;
+    --card-background-color: #1c1c1c;
+    --ha-card-background: #1c1c1c;
+    --divider-color: rgba(225, 225, 225, 0.12);
+    --primary-background-color: #111111;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--primary-background-color); color: var(--primary-text-color);
+    font-family: Roboto, system-ui, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.3rem; font-weight: 500; margin: 0 0 8px; }
+  .demo { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .demo button {
+    min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px dashed #444;
+    background: transparent; color: inherit; font: inherit; cursor: pointer;
+  }
+  .raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 16px; align-items: start; }
+  .abschnitt { border-radius: 16px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  #protokoll { margin-top: 16px; font: 12px/1.4 Consolas, monospace; color: var(--secondary-text-color); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Room Summary Card Test</h1>
+  <div class="demo">
+    <button type="button" data-demo="rauch">Rauchalarm Wohnzimmer umschalten</button>
+    <button type="button" data-demo="tuer">Tür Schuppen umschalten</button>
+    <button type="button" data-demo="strom">Leistung Arbeitsplatz ändern</button>
+    <button type="button" data-demo="lueften">Kellerlüftung umschalten</button>
+  </div>
+  <div class="raster" id="raster"></div>
+  <div id="protokoll"></div>
+</div>
+
+<script type="module">
+  /* ---------------------------------------------- Ersatz fuer ha-icon */
+  let mdi = {};
+  try {
+    mdi = await import("https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/mdi.js");
+  } catch (fehler) {
+    console.warn("MDI-Symbole nicht geladen, Ersatzkreis wird gezeigt", fehler);
+  }
+
+  function mdiName(icon) {
+    return "mdi" + icon.replace(/^mdi:/, "").split("-").map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join("");
+  }
+
+  customElements.define("ha-icon", class extends HTMLElement {
+    static get observedAttributes() { return ["icon"]; }
+    connectedCallback() { this._zeichnen(); }
+    attributeChangedCallback() { this._zeichnen(); }
+    _zeichnen() {
+      const icon = this.getAttribute("icon") || "";
+      const pfad = mdi[mdiName(icon)] || "M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16z";
+      this.style.display = "inline-flex";
+      this.innerHTML = '<svg viewBox="0 0 24 24" style="width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px)" aria-hidden="true">' +
+        '<path fill="currentColor" d="' + pfad + '"/></svg>';
+    }
+  });
+
+  /* ---------------------------- Ersatz fuer die Kartenhelfer von Home Assistant */
+  window.__zusatzkarten = { erzeugt: 0, hassGesetzt: 0 };
+  customElements.define("test-zusatzkarte", class extends HTMLElement {
+    set hass(hass) {
+      window.__zusatzkarten.hassGesetzt++;
+      const id = this.config.entity;
+      const s = id && hass.states[id];
+      this.innerHTML = '<div style="padding:12px;border-radius:12px;background:var(--ha-card-background);border:1px solid var(--divider-color)">' +
+        '<b>' + this.config.type + "</b>" + (this.config.title ? " · " + this.config.title : "") +
+        (s ? '<div style="color:var(--secondary-text-color)">' + id + ": " + s.state + "</div>" : "") + "</div>";
+    }
+  });
+  window.loadCardHelpers = async () => ({
+    createCardElement(config) {
+      window.__zusatzkarten.erzeugt++;
+      const karte = document.createElement("test-zusatzkarte");
+      karte.config = config;
+      return karte;
+    }
+  });
+
+  await import("../dist/room-summary-card.js");
+
+  /* ---------------------------------------- simuliertes Home Assistant */
+  let jetzt = Date.now();
+  function zustand(entityId, state, attributes) {
+    return { entity_id: entityId, state: String(state), attributes: attributes || {}, last_updated: new Date(jetzt++).toISOString() };
+  }
+
+  const STRIP = "living_room_strip";
+  let states = {};
+  [
+    zustand("sensor.bedroom_temperature", "17.9", { unit_of_measurement: "°C", device_class: "temperature" }),
+    zustand("sensor.bedroom_humidity", "69", { unit_of_measurement: "%", device_class: "humidity" }),
+    zustand("cover.bedroom_shutter", "open", { current_position: 100, friendly_name: "Rolladenschalter Schlafzimmer" }),
+    zustand("switch.bedroom_desk", "on", { friendly_name: "Arbeitsplatz" }),
+    zustand("sensor.bedroom_desk_power", "157.3", { unit_of_measurement: "W", device_class: "power" }),
+
+    zustand("sensor.living_room_temperature", "20.6", { unit_of_measurement: "°C" }),
+    zustand("binary_sensor.living_room_smoke", "off", { device_class: "smoke", friendly_name: "Rauchmelder Wohnzimmer" }),
+    zustand("switch.living_room_projector", "off", { friendly_name: "Beamer" }),
+    zustand("sensor." + STRIP + "_output_1_power", "0", { unit_of_measurement: "W" }),
+    zustand("cover.living_room_screen", "closed", { current_position: 0, friendly_name: "Leinwand" }),
+    zustand("sensor.living_room_screen_power", "0.4", { unit_of_measurement: "W" }),
+    zustand("switch." + STRIP + "_output_2", "off", { friendly_name: "Switch 2" }),
+    zustand("sensor." + STRIP + "_output_2_power", "0", { unit_of_measurement: "W" }),
+    zustand("switch." + STRIP + "_output_3", "on", { friendly_name: "DeLorean" }),
+    zustand("sensor." + STRIP + "_output_3_power", "3.8", { unit_of_measurement: "W" }),
+    zustand("sensor." + STRIP + "_output_0_power", "5.1", { unit_of_measurement: "W" }),
+
+    zustand("binary_sensor.shed_door", "off", { device_class: "door", friendly_name: "Tür Schuppen" }),
+    zustand("binary_sensor.shed_smoke", "off", { device_class: "smoke", friendly_name: "Rauchmelder Schuppen" }),
+    zustand("switch.shed_camera_sleep", "off", { friendly_name: "Kamera" }),
+    zustand("sensor.shed_washer_power", "2.1", { unit_of_measurement: "W" }),
+
+    zustand("sensor.toilet_temperature", "20.3", { unit_of_measurement: "°C" }),
+
+    zustand("sensor.basement_temperature", "12.4", { unit_of_measurement: "°C" }),
+    zustand("sensor.basement_humidity", "64", { unit_of_measurement: "%" }),
+    zustand("sensor.basement_ventilation", "Nicht Lüften", { friendly_name: "Kellerlüftung", grund: "Draußen feuchter als drinnen (9,8 zu 8,1 g/m³)" }),
+    zustand("switch.basement_dehumidifier", "on", { friendly_name: "Luftentfeuchter" }),
+    zustand("sensor.basement_dehumidifier_power", "212", { unit_of_measurement: "W" })
+  ].forEach((s) => { states[s.entity_id] = s; });
+
+  const TEXTE = { on: "An", off: "Aus", open: "Offen", closed: "Geschlossen", opening: "Öffnet", closing: "Schließt",
+    playing: "Spielt", paused: "Pausiert", idle: "Untätig", unavailable: "Nicht verfügbar", unknown: "Unbekannt" };
+  const KLASSENTEXTE = { smoke: { on: "Erkannt", off: "Kein Rauch" }, door: { on: "Offen", off: "Geschlossen" } };
+
+  const karten = [];
+  const protokoll = document.getElementById("protokoll");
+
+  function hassBauen() {
+    return {
+      states,
+      language: "de",
+      locale: { language: "de" },
+      formatEntityState(s) {
+        const klasse = KLASSENTEXTE[s.attributes.device_class];
+        if (klasse && klasse[s.state]) return klasse[s.state];
+        if (TEXTE[s.state]) return TEXTE[s.state];
+        return s.state + (s.attributes.unit_of_measurement ? " " + s.attributes.unit_of_measurement : "");
+      },
+      callWS(nachricht) {
+        protokoll.textContent = "callWS " + nachricht.type + "\n" + protokoll.textContent;
+        if (nachricht.type === "history/history_during_period") return verzoegert(verlaufErzeugen(nachricht));
+        if (nachricht.type === "recorder/statistics_during_period") return verzoegert(statistikErzeugen(nachricht));
+        return Promise.reject(new Error("unbekannt: " + nachricht.type));
+      },
+      callService(domaene, dienst, daten) {
+        protokoll.textContent = "callService " + domaene + "." + dienst + " " + JSON.stringify(daten) + "\n" + protokoll.textContent;
+        const alt = states[daten.entity_id];
+        const neu = { ...alt.attributes };
+        let state = alt.state;
+        if (dienst === "turn_on") state = "on";
+        if (dienst === "turn_off") state = "off";
+        if (dienst === "open_cover") { state = "open"; neu.current_position = 100; }
+        if (dienst === "close_cover") { state = "closed"; neu.current_position = 0; }
+        if (dienst === "set_cover_position") { neu.current_position = daten.position; state = daten.position > 0 ? "open" : "closed"; }
+        setzen(daten.entity_id, state, neu);
+        return Promise.resolve();
+      }
+    };
+  }
+
+  /* ------------------------------ Verlauf und Statistik, ohne Zufall erzeugt */
+  function verzoegert(wert) {
+    return new Promise((fertig) => setTimeout(() => fertig(wert), 300));
+  }
+
+  // Grundlast und Laufzeiten je Leistungssensor: [grundlast, last, [von, bis] Stundenbereiche]
+  const LASTPROFILE = {
+    "sensor.bedroom_desk_power": [0, 150, [[8, 13], [15, 17], [23, 24]]],
+    ["sensor." + STRIP + "_output_1_power"]: [0, 148, [[19, 22]]],
+    "sensor.living_room_screen_power": [0.4, 60, [[19, 19.05], [22, 22.05]]],
+    ["sensor." + STRIP + "_output_2_power"]: [0, 14, [[16, 18]]],
+    ["sensor." + STRIP + "_output_3_power"]: [0, 3.8, [[17, 24]]],
+    ["sensor." + STRIP + "_output_0_power"]: [5, 5.4, [[3, 3.5]]],
+    "sensor.shed_washer_power": [2, 2100, [[10, 10.5], [10.5, 11.5]]]
+  };
+
+  function verlaufErzeugen(nachricht) {
+    const start = Date.parse(nachricht.start_time);
+    const ende = Date.parse(nachricht.end_time);
+    const antwort = {};
+    nachricht.entity_ids.forEach((id) => {
+      const [grund, last, zeiten] = LASTPROFILE[id] || [0, 0, []];
+      const eintraege = [];
+      for (let t = start; t <= ende; t += 5 * 60 * 1000) {
+        const stunde = new Date(t).getHours() + new Date(t).getMinutes() / 60;
+        const laeuft = zeiten.some(([von, bis]) => stunde >= von && stunde < bis);
+        const welle = Math.sin(t / 900000) * last * 0.08;
+        eintraege.push({ s: String(Math.max(0, laeuft ? last + welle : grund)), lu: t / 1000 });
+      }
+      antwort[id] = eintraege;
+    });
+    return antwort;
+  }
+
+  // Tagesverbrauch in kWh je Energiesensor: [grundwert, schwankung, phase]
+  const VERBRAUCHSPROFILE = {
+    "sensor.bedroom_desk_energy": [1.1, 0.5, 4],
+    ["sensor." + STRIP + "_output_1_energy"]: [0.35, 0.35, 6],
+    "sensor.living_room_screen_energy": [0.03, 0.03, 2],
+    ["sensor." + STRIP + "_output_2_energy"]: [0.2, 0.2, 9],
+    ["sensor." + STRIP + "_output_3_energy"]: [0.09, 0.02, 3],
+    ["sensor." + STRIP + "_output_0_energy"]: [0.12, 0.005, 1],
+    "sensor.shed_washer_energy": [0.7, 0.7, 5]
+  };
+
+  function statistikErzeugen(nachricht) {
+    const start = new Date(Date.parse(nachricht.start_time));
+    const antwort = {};
+    nachricht.statistic_ids.forEach((id) => {
+      const [grund, hub, phase] = VERBRAUCHSPROFILE[id] || [0, 0, 0];
+      const eintraege = [];
+      for (let i = 0; i < 30; i++) {
+        const tag = new Date(start);
+        tag.setDate(start.getDate() + i);
+        const wert = Math.max(0, grund + hub * Math.sin((i + phase) / 3.1) + (hub / 3) * Math.sin((i * 7 + phase) / 2.3));
+        eintraege.push({ start: tag.getTime(), end: tag.getTime() + 86400000, change: Math.round(wert * 1000) / 1000 });
+      }
+      antwort[id] = eintraege;
+    });
+    return antwort;
+  }
+
+  function setzen(entityId, state, attributes) {
+    states = { ...states, [entityId]: zustand(entityId, state, attributes || states[entityId].attributes) };
+    // Beamer-Leistung folgt dem Schalter, damit die Summe sichtbar reagiert
+    if (entityId === "switch.living_room_projector") {
+      states["sensor." + STRIP + "_output_1_power"] = zustand("sensor." + STRIP + "_output_1_power", state === "on" ? "148" : "0", { unit_of_measurement: "W" });
+    }
+    verteilen();
+  }
+
+  function verteilen() {
+    const hass = hassBauen();
+    karten.forEach((k) => { k.hass = hass; });
+  }
+
+  /* ------------------------------------------------------ Konfigurationen */
+  const RAEUME = [
+    { farbe: "rgba(255, 111, 34, 0.30)", config: {
+      name: "Schlafzimmer", icon: "mdi:bed",
+      temperature: "sensor.bedroom_temperature",
+      humidity: "sensor.bedroom_humidity",
+      devices: [
+        { entity: "cover.bedroom_shutter", name: "Rollladen" },
+        { entity: "switch.bedroom_desk", name: "Arbeitsplatz", icon: "mdi:desktop-classic",
+          power: "sensor.bedroom_desk_power", energy: "sensor.bedroom_desk_energy", color: "#f2b632" }
+      ] } },
+    { farbe: "rgba(0, 150, 136, 0.30)", config: {
+      name: "Wohnzimmer", icon: "mdi:sofa",
+      temperature: "sensor.living_room_temperature",
+      devices: [
+        { entity: "binary_sensor.living_room_smoke", name: "Rauchmelder" },
+        { entity: "switch.living_room_projector", name: "Beamer", icon: "mdi:projector", color: "#5aa9e6",
+          power: "sensor." + STRIP + "_output_1_power", energy: "sensor." + STRIP + "_output_1_energy" },
+        { entity: "cover.living_room_screen", name: "Leinwand", icon: "mdi:projector-screen", color: "#926bc7",
+          power: "sensor.living_room_screen_power", energy: "sensor.living_room_screen_energy" },
+        { entity: "switch." + STRIP + "_output_2", name: "Switch 2", icon: "mdi:nintendo-switch", color: "#e8663d",
+          power: "sensor." + STRIP + "_output_2_power", energy: "sensor." + STRIP + "_output_2_energy" },
+        { entity: "switch." + STRIP + "_output_3", name: "DeLorean-Beleuchtung", icon: "mdi:car-sports", color: "#f2b632",
+          power: "sensor." + STRIP + "_output_3_power", energy: "sensor." + STRIP + "_output_3_energy" },
+        { name: "Raspberry Pi", icon: "mdi:raspberry-pi", color: "#9fb3c4",
+          power: "sensor." + STRIP + "_output_0_power", energy: "sensor." + STRIP + "_output_0_energy" }
+      ] } },
+    { farbe: "rgba(121, 85, 72, 0.30)", config: {
+      name: "Schuppen", icon: "mdi:warehouse",
+      devices: [
+        { entity: "binary_sensor.shed_door", name: "Tür" },
+        { entity: "switch.shed_camera_sleep", name: "Kamera-Ruhemodus", icon: "mdi:cctv-off" },
+        { entity: "binary_sensor.shed_smoke", name: "Rauchmelder" },
+        { name: "Waschmaschine", icon: "mdi:washing-machine", color: "#9fb3c4",
+          power: "sensor.shed_washer_power", energy: "sensor.shed_washer_energy" }
+      ] } },
+    { farbe: "rgba(96, 125, 139, 0.30)", config: {
+      name: "Keller Schuppen", icon: "mdi:home-floor-negative-1",
+      temperature: "sensor.basement_temperature", humidity: "sensor.basement_humidity",
+      devices: [
+        { entity: "sensor.basement_ventilation", name: "Kellerlüftung", attribute: "grund",
+          states: {
+            "Lüften": { color: "green", icon: "mdi:curtains" },
+            "Nicht Lüften": { color: "red", icon: "mdi:curtains-closed" },
+            "Trocken": { color: "red", icon: "mdi:curtains-closed" }
+          } },
+        { entity: "switch.basement_dehumidifier", name: "Luftentfeuchter", icon: "mdi:air-humidifier", color: "#4caf50", power: "sensor.basement_dehumidifier_power" }
+      ],
+      cards: [
+        { type: "history-graph", title: "Luftfeuchte 12 h", entity: "sensor.basement_humidity" },
+        { type: "entities", title: "Schwellen", entity: "switch.basement_dehumidifier" }
+      ] } },
+    { farbe: "rgba(96, 125, 139, 0.30)", config: { name: "WC", icon: "mdi:toilet", temperature: "sensor.toilet_temperature" } }
+  ];
+
+  const raster = document.getElementById("raster");
+  RAEUME.forEach((r) => {
+    const abschnitt = document.createElement("section");
+    abschnitt.className = "abschnitt";
+    abschnitt.style.background = r.farbe;
+    const karte = document.createElement("room-summary-card");
+    karte.setConfig(r.config);
+    abschnitt.appendChild(karte);
+    raster.appendChild(abschnitt);
+    karten.push(karte);
+  });
+  verteilen();
+
+  document.querySelector(".demo").addEventListener("click", (e) => {
+    const knopf = e.target.closest("[data-demo]");
+    if (!knopf) return;
+    const umschalten = (id) => setzen(id, states[id].state === "on" ? "off" : "on");
+    if (knopf.dataset.demo === "rauch") umschalten("binary_sensor.living_room_smoke");
+    if (knopf.dataset.demo === "tuer") umschalten("binary_sensor.shed_door");
+    if (knopf.dataset.demo === "lueften") {
+      const lueften = states["sensor.basement_ventilation"].state !== "Lüften";
+      setzen("sensor.basement_ventilation", lueften ? "Lüften" : "Nicht Lüften", {
+        friendly_name: "Kellerlüftung",
+        grund: lueften ? "Draußen trockener als drinnen (6,2 zu 8,1 g/m³)" : "Draußen feuchter als drinnen (9,8 zu 8,1 g/m³)"
+      });
+    }
+    if (knopf.dataset.demo === "strom") {
+      const id = "sensor.bedroom_desk_power";
+      setzen(id, String(Math.round(Math.random() * 200 * 10) / 10));
+    }
+  });
+
+  window.__test = { states: () => states, setzen };
+</script>
+</body>
+</html>
