@@ -1,5 +1,5 @@
 {
-  "name": "Room Summary Card",
+  "name": "Room Quickview Card",
   "render_readme": true,
-  "filename": "room-summary-card.js"
+  "filename": "room-quickview-card.js"
 }

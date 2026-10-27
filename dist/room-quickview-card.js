@@ -1,5 +1,5 @@
-﻿/**
- * Room Summary Card
+/**
+ * Room Quickview Card
  *
  * Raumkarte fuer Home Assistant: Raumsymbol, Name, Temperatur, Luftfeuchte und
  * Stromverbrauch, darunter je Geraet ein Symbol, das seinen Zustand zeigt.
@@ -17,7 +17,7 @@
 const CARD_VERSION = "0.2.0";
 
 console.info(
-  `%c ROOM-SUMMARY-CARD %c ${CARD_VERSION} `,
+  `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
   "color: #16181a; background: #f2b632; font-weight: 700;",
   "color: #f2b632; background: #16181a;"
 );
@@ -583,7 +583,7 @@ const POPUPSTILE = `
 
 /* ---------------------------------------------------------------- Karte */
 
-class RoomSummaryCard extends HTMLElement {
+class RoomQuickviewCard extends HTMLElement {
   static getStubConfig() {
     return { name: "Raum", icon: "mdi:sofa", devices: [] };
   }
@@ -603,12 +603,12 @@ class RoomSummaryCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.name) throw new Error("room-summary-card: name fehlt");
+    if (!config || !config.name) throw new Error("room-quickview-card: name fehlt");
     if (config.devices !== undefined && !Array.isArray(config.devices)) {
-      throw new Error("room-summary-card: devices muss eine Liste sein");
+      throw new Error("room-quickview-card: devices muss eine Liste sein");
     }
     if (config.cards !== undefined && !Array.isArray(config.cards)) {
-      throw new Error("room-summary-card: cards muss eine Liste sein");
+      throw new Error("room-quickview-card: cards muss eine Liste sein");
     }
     const geraete = (config.devices || []).map((g) => (typeof g === "string" ? { entity: g } : g));
     this._config = Object.assign({}, config, { devices: geraete });
@@ -739,7 +739,7 @@ class RoomSummaryCard extends HTMLElement {
 
   _popupOeffnen(index) {
     this._popupSchliessen();
-    const popup = document.createElement("room-summary-card-popup");
+    const popup = document.createElement("room-quickview-card-popup");
     popup.konfigurieren(this._config, index, () => {
       this._popup = null;
       const raum = this.shadowRoot.querySelector(".raum");
@@ -761,7 +761,7 @@ class RoomSummaryCard extends HTMLElement {
 
 /* --------------------------------------------------------------- Pop-up */
 
-class RoomSummaryCardPopup extends HTMLElement {
+class RoomQuickviewCardPopup extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -1021,7 +1021,7 @@ class RoomSummaryCardPopup extends HTMLElement {
         this._leistung = { start, ende: jetzt, daten: antwort || {} };
         this._zeichnen();
       }).catch((fehler) => {
-        console.warn("room-summary-card: Leistungsverlauf nicht geladen", fehler);
+        console.warn("room-quickview-card: Leistungsverlauf nicht geladen", fehler);
         this._leistung = "fehler";
         this._zeichnen();
       });
@@ -1041,7 +1041,7 @@ class RoomSummaryCardPopup extends HTMLElement {
         this._energie = { anfaenge, daten: antwort || {} };
         this._zeichnen();
       }).catch((fehler) => {
-        console.warn("room-summary-card: Energiestatistik nicht geladen", fehler);
+        console.warn("room-quickview-card: Energiestatistik nicht geladen", fehler);
         this._energie = "fehler";
         this._zeichnen();
       });
@@ -1158,13 +1158,13 @@ class RoomSummaryCardPopup extends HTMLElement {
   }
 }
 
-customElements.define("room-summary-card", RoomSummaryCard);
-customElements.define("room-summary-card-popup", RoomSummaryCardPopup);
+customElements.define("room-quickview-card", RoomQuickviewCard);
+customElements.define("room-quickview-card-popup", RoomQuickviewCardPopup);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "room-summary-card",
-  name: "Room Summary Card",
+  type: "room-quickview-card",
+  name: "Room Quickview Card",
   description: "Raum auf einen Blick: Klima, Strom und Gerätezustand, Bedienung im Pop-up",
   preview: false
 });

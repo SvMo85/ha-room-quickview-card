@@ -1,10 +1,10 @@
-# Room Summary Card
+# Room Quickview Card
 
 Raumkarte für Home Assistant: zeigt einen Raum auf einen Blick, mit Temperatur, Luftfeuchte, Stromverbrauch und dem Zustand jedes Geräts als Symbol. Ein Tipp öffnet ein Pop-up mit allen Geräten, ihren Schaltern und den Verläufen für Leistung und Energie.
 
 Entstanden, weil Schaltflächen auf einer Übersicht beim Scrollen am Telefon zu leicht getroffen werden. Die Raumkarte schaltet deshalb nie direkt: Jeder Tipp öffnet das Pop-up, geschaltet wird erst dort. Ein Tipp auf ein Gerätesymbol hebt das Gerät im Pop-up hervor.
 
-![Raumkarten mit Klima, Leistung und Gerätesymbolen](https://raw.githubusercontent.com/SvMo85/ha-room-summary-card/main/images/karten.png)
+![Raumkarten mit Klima, Leistung und Gerätesymbolen](https://raw.githubusercontent.com/SvMo85/ha-room-quickview-card/main/images/karten.png)
 
 ## Bedienung
 
@@ -14,7 +14,7 @@ Entstanden, weil Schaltflächen auf einer Übersicht beim Scrollen am Telefon zu
 - Schließen über **Schließen**, Escape oder einen Tipp daneben.
 - In den Diagrammen zeigt **Mauszeiger oder Finger** die Werte des Zeitpunkts bzw. Tages je Gerät samt Summe. Senkrechtes Wischen scrollt dabei weiter das Pop-up.
 
-![Pop-up mit Geräten, Leistung der letzten 24 Stunden und Energie je Tag](https://raw.githubusercontent.com/SvMo85/ha-room-summary-card/main/images/popup.png)
+![Pop-up mit Geräten, Leistung der letzten 24 Stunden und Energie je Tag](https://raw.githubusercontent.com/SvMo85/ha-room-quickview-card/main/images/popup.png)
 
 ## Farben
 
@@ -36,21 +36,21 @@ Die Option `color` eines Geräts gilt nur in den Diagrammen.
 ### Über HACS
 
 1. HACS öffnen, oben rechts das Menü, **Custom repositories**
-2. `https://github.com/SvMo85/ha-room-summary-card` eintragen, Kategorie **Dashboard**
+2. `https://github.com/SvMo85/ha-room-quickview-card` eintragen, Kategorie **Dashboard**
 3. Die Karte herunterladen
 4. Browser mit Strg+Shift+F5 neu laden
 
 ### Von Hand
 
-1. `dist/room-summary-card.js` nach `config/www/` kopieren
+1. `dist/room-quickview-card.js` nach `config/www/` kopieren
 2. Unter Einstellungen > Dashboards > Ressourcen eintragen:
-   `/local/room-summary-card.js` als **JavaScript-Modul**
+   `/local/room-quickview-card.js` als **JavaScript-Modul**
 3. Browser neu laden
 
 ## Verwendung
 
 ```yaml
-type: custom:room-summary-card
+type: custom:room-quickview-card
 name: Wohnzimmer
 icon: mdi:sofa
 temperature: sensor.living_room_temperature

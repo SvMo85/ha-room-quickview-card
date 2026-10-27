@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Room Summary Card Test</title>
+<title>Room Quickview Card Test</title>
 <style>
   /* Theme-Variablen, wie Home Assistant sie im dunklen Standardthema setzt */
   :root {
@@ -34,7 +34,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Room Summary Card Test</h1>
+  <h1>Room Quickview Card Test</h1>
   <div class="demo">
     <button type="button" data-demo="rauch">Rauchalarm Wohnzimmer umschalten</button>
     <button type="button" data-demo="tuer">Tür Schuppen umschalten</button>
@@ -92,7 +92,7 @@
     }
   });
 
-  await import("../dist/room-summary-card.js");
+  await import("../dist/room-quickview-card.js");
 
   /* ---------------------------------------- simuliertes Home Assistant */
   let jetzt = Date.now();
@@ -311,7 +311,7 @@
     const abschnitt = document.createElement("section");
     abschnitt.className = "abschnitt";
     abschnitt.style.background = r.farbe;
-    const karte = document.createElement("room-summary-card");
+    const karte = document.createElement("room-quickview-card");
     karte.setConfig(r.config);
     abschnitt.appendChild(karte);
     raster.appendChild(abschnitt);
