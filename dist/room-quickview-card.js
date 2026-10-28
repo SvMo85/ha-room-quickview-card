@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Room Quickview Card
  *
  * Raumkarte fuer Home Assistant: Raumsymbol, Name, Temperatur, Luftfeuchte und
@@ -14,7 +14,7 @@
  * eingebettete Karten Theme und Kontext der Oberflaeche.
  */
 
-const CARD_VERSION = "0.4.0";
+const CARD_VERSION = "0.4.1";
 
 console.info(
   `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
@@ -38,7 +38,9 @@ const SCHALTBARE_DOMAENEN = ["switch", "light", "fan", "input_boolean", "siren"]
 const OHNE_WERT = ["unavailable", "unknown"];
 // Ereignisse, mit denen Karten Home Assistant um Detailfenster, Dialoge oder Hinweise bitten
 const WEITERZUREICHENDE_EREIGNISSE = ["hass-more-info", "show-dialog", "hass-notification"];
-const HALTEDAUER_MS = 2000;
+const HALTEDAUER_MS = 1000;
+// Abstand des Halterings um das Symbol; er liegt ueber der Karte, damit ihn der Finger nicht verdeckt
+const HALTERING_ABSTAND_PX = 10;
 const BEWEGUNGSSCHWELLE_PX = 8;
 
 // Der Haltering dreht einen Winkel; animierbar ist er nur als registrierte Eigenschaft,
@@ -422,6 +424,7 @@ const GEMEINSAME_STILE = `
     --rsc-flaeche: color-mix(in srgb, var(--rsc-text) 5%, transparent);
     --rsc-leistung: ${FARBEN.leistung};
     --rsc-alarm: ${FARBEN.alarm};
+    --rsc-halten: ${FARBEN.an};
   }
   ha-icon { display: inline-flex; }
   .chip {
@@ -499,6 +502,8 @@ const KARTENSTILE = `
     display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 6px;
     overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
     margin-right: -12px; padding-right: 12px;
+    /* Raum fuer das beim Halten vergroesserte Symbol, ohne die Zeile hoeher zu machen */
+    padding-block: 4px; margin-block: -4px;
   }
   .chips::-webkit-scrollbar { display: none; }
   .chips > .chip { flex: 0 0 auto; }
@@ -511,17 +516,22 @@ const KARTENSTILE = `
   .chip:active { transform: scale(0.94); }
   .chip:focus-visible { outline: 2px solid var(--rsc-text); outline-offset: 2px; }
 
-  /* Langes Halten: ein Ring laeuft innen am Rand des Symbols voll */
-  .chip.haltbar { position: relative; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
-  .chip.haltbar::after {
-    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2.5px; pointer-events: none;
-    background: conic-gradient(var(--rsc-text) var(--rqc-halten), transparent 0);
+  /* Langes Halten: ein leuchtender Ring laeuft gross um das Symbol herum voll. Er liegt als
+     eigene Ebene ueber der Karte, weil die Chip-Leiste alles abschneidet, was ueber sie hinausragt. */
+  .chip.haltbar { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .chip.haelt { transform: scale(1.15); transition: transform ${HALTEDAUER_MS}ms ease-out; }
+  .raum { position: relative; }
+  .raum.haelt { overflow: visible; }
+  .haltering {
+    position: absolute; z-index: 2; pointer-events: none; box-sizing: border-box;
+    border-radius: 18px; padding: 4px;
+    background:
+      conic-gradient(var(--rsc-halten) var(--rqc-halten), color-mix(in srgb, var(--rsc-halten) 18%, transparent) 0);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
-    opacity: 0;
+    filter: drop-shadow(0 0 6px var(--rsc-halten)) drop-shadow(0 0 12px var(--rsc-halten));
+    animation: halten ${HALTEDAUER_MS}ms linear forwards;
   }
-  .chip.haelt { transform: scale(1.06); transition: transform ${HALTEDAUER_MS}ms ease-out; }
-  .chip.haelt::after { opacity: 1; animation: halten ${HALTEDAUER_MS}ms linear forwards; }
   @keyframes halten { from { --rqc-halten: 0deg; } to { --rqc-halten: 360deg; } }
   @media (prefers-reduced-motion: reduce) { .raum { transition: none; } }
 `;
@@ -809,7 +819,7 @@ class RoomQuickviewCard extends HTMLElement {
     if (!chip || e.button > 0) return;
     this._haltenAbbrechen();
     this._gehaltenBeendet = false;
-    this._halten = { chip, x: e.clientX, y: e.clientY };
+    this._halten = { chip, x: e.clientX, y: e.clientY, ring: this._halteringAnlegen(chip) };
     chip.classList.add("haelt");
     this._halten.zeitgeber = setTimeout(() => {
       const geraet = this._config.devices[Number(chip.dataset.index)];
@@ -830,8 +840,26 @@ class RoomQuickviewCard extends HTMLElement {
     if (!this._halten) return;
     clearTimeout(this._halten.zeitgeber);
     this._halten.chip.classList.remove("haelt");
+    this._halten.ring.remove();
+    this.shadowRoot.querySelector(".raum").classList.remove("haelt");
     this._halten = null;
     this._aktualisieren();
+  }
+
+  // Ring als eigene Ebene in der Karte, um das Symbol herum ausgerichtet
+  _halteringAnlegen(chip) {
+    const raum = this.shadowRoot.querySelector(".raum");
+    const r = raum.getBoundingClientRect();
+    const c = chip.getBoundingClientRect();
+    const ring = document.createElement("div");
+    ring.className = "haltering";
+    ring.style.left = (c.left - r.left - raum.clientLeft - HALTERING_ABSTAND_PX) + "px";
+    ring.style.top = (c.top - r.top - raum.clientTop - HALTERING_ABSTAND_PX) + "px";
+    ring.style.width = (c.width + 2 * HALTERING_ABSTAND_PX) + "px";
+    ring.style.height = (c.height + 2 * HALTERING_ABSTAND_PX) + "px";
+    raum.classList.add("haelt");
+    raum.appendChild(ring);
+    return ring;
   }
 
   _beiTaste(e) {

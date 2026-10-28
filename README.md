@@ -9,7 +9,7 @@ Entstanden, weil Schaltflächen auf einer Übersicht beim Scrollen am Telefon zu
 ## Bedienung
 
 - **Tipp auf die Karte** öffnet das Pop-up, **Tipp auf ein Gerätesymbol** öffnet es mit diesem Gerät hervorgehoben.
-- **2 Sekunden halten** auf dem Symbol eines Schalters oder Rollladens öffnet das Detailfenster von Home Assistant für dieses Gerät. Ein Ring um das Symbol zeigt den Fortschritt; Bewegen oder Loslassen bricht ab.
+- **1 Sekunde halten** auf dem Symbol eines Schalters oder Rollladens öffnet das Detailfenster von Home Assistant für dieses Gerät. Ein leuchtender Ring um das Symbol zeigt den Fortschritt, auch wenn der Finger das Symbol verdeckt; Bewegen oder Loslassen bricht ab.
 - Passen nicht alle Symbole in die Zeile, lässt sie sich **seitlich wischen**; ein weicher Rand zeigt, auf welcher Seite noch Symbole liegen.
 - Im Pop-up werden Geräte **geschaltet**, Rollläden über die Knöpfe **Auf, Stopp, Zu** und einen **Positionsregler** gestellt.
 - Schließen über das **X**, Escape oder einen Tipp daneben.
