@@ -9,9 +9,10 @@ Entstanden, weil Schaltflächen auf einer Übersicht beim Scrollen am Telefon zu
 ## Bedienung
 
 - **Tipp auf die Karte** öffnet das Pop-up, **Tipp auf ein Gerätesymbol** öffnet es mit diesem Gerät hervorgehoben.
+- **2 Sekunden halten** auf dem Symbol eines Schalters oder Rollladens öffnet das Detailfenster von Home Assistant für dieses Gerät. Ein Ring um das Symbol zeigt den Fortschritt; Bewegen oder Loslassen bricht ab.
 - Passen nicht alle Symbole in die Zeile, lässt sie sich **seitlich wischen**; ein weicher Rand zeigt, auf welcher Seite noch Symbole liegen.
-- Im Pop-up werden Geräte **geschaltet**, Rollläden zusätzlich über einen **Positionsregler** gestellt.
-- Schließen über **Schließen**, Escape oder einen Tipp daneben.
+- Im Pop-up werden Geräte **geschaltet**, Rollläden über die Knöpfe **Auf, Stopp, Zu** und einen **Positionsregler** gestellt.
+- Schließen über das **X**, Escape oder einen Tipp daneben.
 - In den Diagrammen zeigt **Mauszeiger oder Finger** die Werte des Zeitpunkts bzw. Tages je Gerät samt Summe. Senkrechtes Wischen scrollt dabei weiter das Pop-up.
 
 ![Pop-up mit Geräten, Leistung der letzten 24 Stunden und Energie je Tag](https://raw.githubusercontent.com/SvMo85/ha-room-quickview-card/main/images/popup.png)

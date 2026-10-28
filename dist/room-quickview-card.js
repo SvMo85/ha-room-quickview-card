@@ -14,7 +14,7 @@
  * eingebettete Karten Theme und Kontext der Oberflaeche.
  */
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.4.0";
 
 console.info(
   `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
@@ -38,6 +38,16 @@ const SCHALTBARE_DOMAENEN = ["switch", "light", "fan", "input_boolean", "siren"]
 const OHNE_WERT = ["unavailable", "unknown"];
 // Ereignisse, mit denen Karten Home Assistant um Detailfenster, Dialoge oder Hinweise bitten
 const WEITERZUREICHENDE_EREIGNISSE = ["hass-more-info", "show-dialog", "hass-notification"];
+const HALTEDAUER_MS = 2000;
+const BEWEGUNGSSCHWELLE_PX = 8;
+
+// Der Haltering dreht einen Winkel; animierbar ist er nur als registrierte Eigenschaft,
+// und @property wirkt im Shadow DOM nicht, deshalb die Registrierung hier
+try {
+  CSS.registerProperty({ name: "--rqc-halten", syntax: "<angle>", inherits: false, initialValue: "0deg" });
+} catch (fehler) {
+  // bereits registriert, etwa nach erneutem Laden der Datei
+}
 const AKTIVE_ZUSTAENDE = ["on", "open", "opening", "closing", "playing", "paused", "home", "recording", "streaming"];
 
 const DOMAENENSYMBOLE = {
@@ -254,6 +264,11 @@ function chipMerkmale(b) {
 
 function chipKlassen(b) {
   return "chip" + (b.art === "rollladen" ? " rollladen" : "");
+}
+
+// Langes Halten oeffnet das Detailfenster nur bei Geraeten, die sich bedienen lassen
+function istHaltbar(b) {
+  return Boolean(b.entity) && b.stateObj !== undefined && (b.art === "schalter" || b.art === "rollladen");
 }
 
 function zeigtChip(geraet) {
@@ -495,6 +510,19 @@ const KARTENSTILE = `
   .chip[data-an="true"]:hover { background: color-mix(in srgb, var(--farbe) 30%, transparent); }
   .chip:active { transform: scale(0.94); }
   .chip:focus-visible { outline: 2px solid var(--rsc-text); outline-offset: 2px; }
+
+  /* Langes Halten: ein Ring laeuft innen am Rand des Symbols voll */
+  .chip.haltbar { position: relative; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .chip.haltbar::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2.5px; pointer-events: none;
+    background: conic-gradient(var(--rsc-text) var(--rqc-halten), transparent 0);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0;
+  }
+  .chip.haelt { transform: scale(1.06); transition: transform ${HALTEDAUER_MS}ms ease-out; }
+  .chip.haelt::after { opacity: 1; animation: halten ${HALTEDAUER_MS}ms linear forwards; }
+  @keyframes halten { from { --rqc-halten: 0deg; } to { --rqc-halten: 360deg; } }
   @media (prefers-reduced-motion: reduce) { .raum { transition: none; } }
 `;
 
@@ -511,15 +539,29 @@ const POPUPSTILE = `
     padding: 14px; display: flex; flex-direction: column; gap: 10px;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
   }
-  .popupkopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .popupkopf h2 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+  /* Kopf wie in den Dialogen von Home Assistant: runder Schliessen-Knopf links vom Titel */
+  .popupkopf { display: flex; align-items: center; gap: 8px; margin: -4px 0 0 -6px; }
+  .popupkopf h2 { margin: 0; font-size: 1.25rem; font-weight: 400; line-height: 1.4; }
   .schliessen {
-    min-height: 36px; padding: 0 14px; border-radius: 8px;
-    border: 1px solid var(--rsc-linie); background: transparent; color: var(--rsc-text);
-    font: inherit; font-size: 0.88rem; cursor: pointer;
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; padding: 0;
+    display: grid; place-items: center; border: none; background: transparent;
+    color: var(--rsc-text); cursor: pointer; --mdc-icon-size: 24px;
   }
-  .schliessen:hover { background: color-mix(in srgb, var(--rsc-text) 7%, transparent); }
+  .schliessen:hover { background: color-mix(in srgb, var(--rsc-text) 8%, transparent); }
   .schliessen:focus-visible { outline: 2px solid var(--rsc-text); outline-offset: 2px; }
+
+  /* Rollladen: getrennte Knoepfe wie die Rollladen-Kachel von Home Assistant */
+  .rollladenknoepfe { display: flex; gap: 8px; margin-bottom: 8px; }
+  .rollladenknoepfe button {
+    flex: 1; height: 42px; border-radius: 12px; border: none; padding: 0;
+    display: grid; place-items: center; cursor: pointer; --mdc-icon-size: 22px;
+    background: color-mix(in srgb, var(--rsc-text) 8%, transparent); color: var(--rsc-text);
+    transition: background-color 120ms ease, transform 80ms ease;
+  }
+  .rollladenknoepfe button:hover { background: color-mix(in srgb, var(--rsc-text) 14%, transparent); }
+  .rollladenknoepfe button:active { transform: scale(0.96); }
+  .rollladenknoepfe button:focus-visible { outline: 2px solid var(--rsc-text); outline-offset: 2px; }
+  .rollladenknoepfe button:disabled { opacity: 0.4; cursor: default; }
   .liste { display: flex; flex-direction: column; gap: 8px; }
   .karten, .verlaeufe { display: flex; flex-direction: column; gap: 10px; }
   .karten:empty, .verlaeufe:empty { display: none; }
@@ -609,6 +651,15 @@ class RoomQuickviewCard extends HTMLElement {
       if (e.target.classList && e.target.classList.contains("chips")) this._ueberlaufMarkieren();
     }, true);
     this._groesse = new ResizeObserver(() => this._ueberlaufMarkieren());
+    this.shadowRoot.addEventListener("pointerdown", (e) => this._haltenBeginnen(e));
+    this.shadowRoot.addEventListener("pointermove", (e) => this._haltenPruefen(e));
+    ["pointerup", "pointercancel", "pointerleave"].forEach((typ) => {
+      this.shadowRoot.addEventListener(typ, () => this._haltenAbbrechen(), true);
+    });
+    // Langes Druecken soll kein Kontextmenue und keine Textauswahl ausloesen
+    this.shadowRoot.addEventListener("contextmenu", (e) => {
+      if (e.target.closest(".chip.haltbar")) e.preventDefault();
+    });
   }
 
   setConfig(config) {
@@ -654,6 +705,8 @@ class RoomQuickviewCard extends HTMLElement {
   // Neu gezeichnet wird nur, wenn sich eine beteiligte Entitaet geaendert hat
   _aktualisieren() {
     if (!this._config || !this._hass) return;
+    // Waehrend gehalten wird, wuerde Neuzeichnen den Ring entfernen; es folgt nach dem Halten
+    if (this._halten) return;
     const signatur = this._beteiligteEntitaeten()
       .map((id) => {
         const s = this._hass.states[id];
@@ -701,7 +754,7 @@ class RoomQuickviewCard extends HTMLElement {
       .map((g, i) => {
         if (!zeigtChip(g) || !istSichtbar(hass, g)) return "";
         const b = bewertungen[i];
-        return '<button type="button" class="' + chipKlassen(b) + '" data-index="' + i + '"' + chipMerkmale(b) +
+        return '<button type="button" class="' + chipKlassen(b) + (istHaltbar(b) ? " haltbar" : "") + '" data-index="' + i + '"' + chipMerkmale(b) +
           ' title="' + esc(b.name) + '"' +
           ' aria-label="' + esc(b.name) + ", " + esc(b.text) + ', Details öffnen">' +
           '<ha-icon icon="' + esc(b.symbol) + '"></ha-icon></button>';
@@ -737,9 +790,48 @@ class RoomQuickviewCard extends HTMLElement {
   }
 
   _beiKlick(e) {
+    // Der Klick nach einem vollendeten Halten oeffnet nicht zusaetzlich das Raum-Pop-up
+    if (this._gehaltenBeendet) {
+      this._gehaltenBeendet = false;
+      return;
+    }
     if (!e.target.closest(".raum.klickbar")) return;
     const chip = e.target.closest(".chip");
     this._popupOeffnen(chip ? Number(chip.dataset.index) : null);
+  }
+
+  /* ------------------------------------------------- langes Halten */
+
+  // Halten auf dem Symbol eines bedienbaren Geraets oeffnet nach HALTEDAUER_MS dessen Detailfenster.
+  // Ein Ring zeigt den Fortschritt; Bewegung, Scrollen oder Loslassen brechen ab.
+  _haltenBeginnen(e) {
+    const chip = e.target.closest(".chip.haltbar");
+    if (!chip || e.button > 0) return;
+    this._haltenAbbrechen();
+    this._gehaltenBeendet = false;
+    this._halten = { chip, x: e.clientX, y: e.clientY };
+    chip.classList.add("haelt");
+    this._halten.zeitgeber = setTimeout(() => {
+      const geraet = this._config.devices[Number(chip.dataset.index)];
+      this._haltenAbbrechen();
+      this._gehaltenBeendet = true;
+      this.dispatchEvent(new CustomEvent("hass-more-info", {
+        detail: { entityId: geraet.entity }, bubbles: true, composed: true
+      }));
+    }, HALTEDAUER_MS);
+  }
+
+  _haltenPruefen(e) {
+    if (!this._halten) return;
+    if (Math.hypot(e.clientX - this._halten.x, e.clientY - this._halten.y) > BEWEGUNGSSCHWELLE_PX) this._haltenAbbrechen();
+  }
+
+  _haltenAbbrechen() {
+    if (!this._halten) return;
+    clearTimeout(this._halten.zeitgeber);
+    this._halten.chip.classList.remove("haelt");
+    this._halten = null;
+    this._aktualisieren();
   }
 
   _beiTaste(e) {
@@ -893,8 +985,10 @@ class RoomQuickviewCardPopup extends HTMLElement {
       "<style>" + GEMEINSAME_STILE + POPUPSTILE + "</style>" +
       '<div class="abdunklung">' +
         '<div class="popup" role="dialog" aria-modal="true" aria-labelledby="titel">' +
-          '<div class="popupkopf"><h2 id="titel">' + esc(this._config.name) + '</h2>' +
-            '<button type="button" class="schliessen">Schließen</button></div>' +
+          '<div class="popupkopf">' +
+            '<button type="button" class="schliessen" aria-label="Schließen" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button>' +
+            '<h2 id="titel">' + esc(this._config.name) + "</h2>" +
+            "</div>" +
           '<div class="liste">' + eintraege + "</div>" +
           '<div class="karten"></div>' +
           '<div class="verlaeufe"></div>' +
@@ -1008,13 +1102,17 @@ class RoomQuickviewCardPopup extends HTMLElement {
   _zeileHtml(geraet, b, index) {
     let rechts = "";
     let zusatz = "";
-    if (b.art === "schalter" || b.art === "rollladen") {
+    if (b.art === "schalter") {
       rechts = '<button type="button" class="schalter" role="switch" data-index="' + index + '" aria-checked="' + b.an + '"' +
         ' aria-label="' + esc(b.name) + ' schalten"></button>';
     }
-    if (b.art === "rollladen" && typeof b.position === "number") {
-      zusatz = '<div class="zusatz"><input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="5"' +
-        ' value="' + b.position + '" aria-label="Position ' + esc(b.name) + '"></div>';
+    if (b.art === "rollladen") {
+      zusatz = '<div class="zusatz">' + this._rollladenknoepfeHtml(b, index) +
+        (typeof b.position === "number"
+          ? '<input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="5"' +
+            ' value="' + b.position + '" aria-label="Position ' + esc(b.name) + '">'
+          : "") +
+        "</div>";
     }
     const klassen = "geraet" +
       (geraet.show_when ? " unter" : "") +
@@ -1150,6 +1248,20 @@ class RoomQuickviewCardPopup extends HTMLElement {
     return '<div class="diagramm"><div class="dkopf"><span>Energie je Tag</span><span>' + kopfRechts + "</span></div>" + inhalt + "</div>";
   }
 
+  // Auf, Stopp, Zu; ganz offen sperrt Auf, ganz geschlossen sperrt Zu
+  _rollladenknoepfeHtml(b, index) {
+    const ganzOffen = b.position === 100 || (b.position === undefined && b.stateObj.state === "open");
+    const ganzZu = b.stateObj.state === "closed";
+    const knopf = (aktion, symbol, text, gesperrt) =>
+      '<button type="button" data-index="' + index + '" data-rollladen="' + aktion + '" aria-label="' + text + " " + esc(b.name) + '"' +
+        ' title="' + text + '"' + (gesperrt ? " disabled" : "") + '><ha-icon icon="' + symbol + '"></ha-icon></button>';
+    return '<div class="rollladenknoepfe">' +
+      knopf("open_cover", "mdi:arrow-up", "Auf", ganzOffen) +
+      knopf("stop_cover", "mdi:stop", "Stopp", false) +
+      knopf("close_cover", "mdi:arrow-down", "Zu", ganzZu) +
+      "</div>";
+  }
+
   // Zusatzzeile aus einem Attribut der Entitaet, etwa der Grund einer Lueftungsempfehlung
   _attributHtml(geraet, b) {
     const wert = geraet.attribute && b.stateObj && b.stateObj.attributes[geraet.attribute];
@@ -1167,6 +1279,11 @@ class RoomQuickviewCardPopup extends HTMLElement {
     }
     const schalter = e.target.closest(".schalter");
     if (schalter) this._schalten(this._config.devices[Number(schalter.dataset.index)]);
+    const rollladen = e.target.closest("[data-rollladen]");
+    if (rollladen) {
+      const geraet = this._config.devices[Number(rollladen.dataset.index)];
+      this._hass.callService("cover", rollladen.dataset.rollladen, { entity_id: geraet.entity });
+    }
   }
 
   _beiAenderung(e) {
@@ -1180,10 +1297,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
     const s = this._hass.states[geraet.entity];
     if (!s) return;
     const domaene = domaeneVon(geraet.entity);
-    if (domaene === "cover") {
-      this._hass.callService("cover", s.state === "closed" ? "open_cover" : "close_cover", { entity_id: geraet.entity });
-      return;
-    }
     this._hass.callService(domaene, s.state === "on" ? "turn_off" : "turn_on", { entity_id: geraet.entity });
   }
 }
