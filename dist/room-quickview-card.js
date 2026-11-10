@@ -1,58 +1,20 @@
-﻿/**
- * Room Quickview Card
- *
- * Raumkarte fuer Home Assistant: Raumsymbol, Name, Temperatur, Luftfeuchte und
- * Stromverbrauch, darunter je Geraet ein Symbol, das seinen Zustand zeigt.
- *
- * Die Karte schaltet nie direkt. Beim Scrollen am Telefon wuerde sonst leicht
- * ein Geraet ausgehen. Jeder Tipp oeffnet ein Pop-up; ein Tipp auf ein Symbol
- * hebt dort das zugehoerige Geraet hervor. Geschaltet wird erst im Pop-up.
- *
- * Das Pop-up haengt sich beim Oeffnen in den Shadow Root von home-assistant,
- * wie die Dialoge von Home Assistant selbst: Dashboard-Container wuerden eine
- * fest positionierte Ebene sonst abschneiden, und nur dort erreichen
- * eingebettete Karten Theme und Kontext der Oberflaeche.
- */
-
-const CARD_VERSION = "0.4.2";
-
-console.info(
-  `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
-  "color: #16181a; background: #f2b632; font-weight: 700;",
-  "color: #f2b632; background: #16181a;"
-);
-
-// Chips kennen nur vier Farben: an, aus, Melder in Ordnung und Alarm.
-// Geraetefarben aus der Konfiguration gelten nur in den Diagrammen.
-const FARBEN = {
+// src/konstanten.js
+var FARBEN = {
   an: "#f2b632",
   aus: "#9fb3c4",
   ok: "#4caf50",
   alarm: "#e0524a",
   leistung: "#f2b632"
 };
-
-// Geraeteklassen, bei denen "an" eine Gefahr meldet; "aus" ist dort der gute Zustand
-const ALARMKLASSEN = ["smoke", "gas", "carbon_monoxide", "moisture", "heat", "safety", "problem", "tamper"];
-const SCHALTBARE_DOMAENEN = ["switch", "light", "fan", "input_boolean", "siren"];
-const OHNE_WERT = ["unavailable", "unknown"];
-// Ereignisse, mit denen Karten Home Assistant um Detailfenster, Dialoge oder Hinweise bitten
-const WEITERZUREICHENDE_EREIGNISSE = ["hass-more-info", "show-dialog", "hass-notification"];
-const HALTEDAUER_MS = 1000;
-// Abstand des Halterings um das Symbol; er liegt ueber der Karte, damit ihn der Finger nicht verdeckt
-const HALTERING_ABSTAND_PX = 10;
-const BEWEGUNGSSCHWELLE_PX = 8;
-
-// Der Haltering dreht einen Winkel; animierbar ist er nur als registrierte Eigenschaft,
-// und @property wirkt im Shadow DOM nicht, deshalb die Registrierung hier
-try {
-  CSS.registerProperty({ name: "--rqc-halten", syntax: "<angle>", inherits: false, initialValue: "0deg" });
-} catch (fehler) {
-  // bereits registriert, etwa nach erneutem Laden der Datei
-}
-const AKTIVE_ZUSTAENDE = ["on", "open", "opening", "closing", "playing", "paused", "home", "recording", "streaming"];
-
-const DOMAENENSYMBOLE = {
+var ALARMKLASSEN = ["smoke", "gas", "carbon_monoxide", "moisture", "heat", "safety", "problem", "tamper"];
+var SCHALTBARE_DOMAENEN = ["switch", "light", "fan", "input_boolean", "siren"];
+var OHNE_WERT = ["unavailable", "unknown"];
+var WEITERZUREICHENDE_EREIGNISSE = ["hass-more-info", "show-dialog", "hass-notification"];
+var HALTEDAUER_MS = 1e3;
+var HALTERING_ABSTAND_PX = 10;
+var BEWEGUNGSSCHWELLE_PX = 8;
+var AKTIVE_ZUSTAENDE = ["on", "open", "opening", "closing", "playing", "paused", "home", "recording", "streaming"];
+var DOMAENENSYMBOLE = {
   switch: "mdi:power-socket-de",
   light: "mdi:lightbulb",
   fan: "mdi:fan",
@@ -65,8 +27,7 @@ const DOMAENENSYMBOLE = {
   sensor: "mdi:flash",
   binary_sensor: "mdi:radiobox-blank"
 };
-
-const KLASSENSYMBOLE = {
+var KLASSENSYMBOLE = {
   smoke: "mdi:smoke-detector-variant",
   gas: "mdi:gas-cylinder",
   carbon_monoxide: "mdi:molecule-co",
@@ -79,59 +40,44 @@ const KLASSENSYMBOLE = {
   motion: "mdi:motion-sensor",
   running: "mdi:play-circle-outline"
 };
-
-const KLASSENSYMBOLE_OFFEN = {
+var KLASSENSYMBOLE_OFFEN = {
   door: "mdi:door-open",
   garage_door: "mdi:garage-open",
   window: "mdi:window-open",
   opening: "mdi:door-open"
 };
 
-/* ------------------------------------------------------------ Bewertung */
-
+// src/bewertung.js
 function domaeneVon(entityId) {
   return entityId.split(".")[0];
 }
-
 function esc(text) {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-
-// Zahl aus dem Zustand; bei einem Thermostat aus dem genannten Attribut, etwa current_temperature
 function zahlAus(hass, entityId, klimaAttribut) {
-  const s = entityId ? hass.states[entityId] : undefined;
+  const s = entityId ? hass.states[entityId] : void 0;
   if (!s || OHNE_WERT.includes(s.state)) return null;
   const roh = klimaAttribut && domaeneVon(entityId) === "climate" ? s.attributes[klimaAttribut] : s.state;
   const n = parseFloat(roh);
   return Number.isFinite(n) ? n : null;
 }
-
 function sprache(hass) {
-  return (hass.locale && hass.locale.language) || hass.language || "de";
+  return hass.locale && hass.locale.language || hass.language || "de";
 }
-
 function zahlText(hass, wert, nachkomma) {
   return new Intl.NumberFormat(sprache(hass), {
     minimumFractionDigits: nachkomma,
     maximumFractionDigits: nachkomma
   }).format(wert);
 }
-
-// Unter 10 W eine Nachkommastelle, darueber und bei null ganze Watt
 function leistungText(hass, watt) {
   return zahlText(hass, watt, watt !== 0 && Math.abs(watt) < 10 ? 1 : 0) + " W";
 }
-
 function zustandText(hass, s) {
   if (typeof hass.formatEntityState === "function") return hass.formatEntityState(s);
   const einheit = s.attributes.unit_of_measurement;
   return s.state + (einheit ? " " + einheit : "");
 }
-
 function standardsymbol(s) {
   const domaene = domaeneVon(s.entity_id);
   const klasse = s.attributes.device_class;
@@ -143,33 +89,25 @@ function standardsymbol(s) {
   }
   return DOMAENENSYMBOLE[domaene] || "mdi:circle-outline";
 }
-
 function istSichtbar(hass, geraet) {
   const bedingung = geraet.show_when;
   if (!bedingung) return true;
   const entityId = typeof bedingung === "string" ? bedingung : bedingung.entity;
   const s = hass.states[entityId];
   if (!s) return false;
-  if (typeof bedingung === "string" || bedingung.state === undefined) return AKTIVE_ZUSTAENDE.includes(s.state);
+  if (typeof bedingung === "string" || bedingung.state === void 0) return AKTIVE_ZUSTAENDE.includes(s.state);
   const erlaubt = Array.isArray(bedingung.state) ? bedingung.state : [bedingung.state];
   return erlaubt.includes(s.state);
 }
-
-/**
- * Ermittelt aus Konfiguration und Zustand, wie ein Geraet erscheint:
- * art (schalter, rollladen, status, messung), an, ton (aktiv, aus, alarm),
- * farbe, symbol, text und leistung.
- */
 function bewerteGeraet(hass, geraet) {
-  const s = geraet.entity ? hass.states[geraet.entity] : undefined;
+  const s = geraet.entity ? hass.states[geraet.entity] : void 0;
   const leistung = zahlAus(hass, geraet.power);
   const basis = {
-    name: geraet.name || (s && s.attributes.friendly_name) || geraet.entity || "Gerät",
+    name: geraet.name || s && s.attributes.friendly_name || geraet.entity || "Gerät",
     entity: geraet.entity,
     stateObj: s,
     leistung
   };
-
   if (!geraet.entity) {
     const laeuft = leistung !== null && leistung > 0.5;
     return Object.assign(basis, mitZustand(laeuft), {
@@ -178,38 +116,36 @@ function bewerteGeraet(hass, geraet) {
       text: leistung === null ? "Nicht verfügbar" : laeuft ? "Läuft" : "Aus"
     });
   }
-
   if (!s) {
     return Object.assign(basis, mitZustand(false), {
-      art: "status", symbol: geraet.icon || "mdi:help-circle-outline", text: "Entität nicht gefunden"
+      art: "status",
+      symbol: geraet.icon || "mdi:help-circle-outline",
+      text: "Entität nicht gefunden"
     });
   }
-
   const domaene = domaeneVon(s.entity_id);
   const symbol = geraet.icon || standardsymbol(s);
   const text = zustandText(hass, s);
-
   if (OHNE_WERT.includes(s.state)) {
     return Object.assign(basis, mitZustand(false), { art: "status", symbol, text });
   }
-
   const regel = geraet.states && geraet.states[s.state];
-
-  // Ein offener Rollladen ist nicht "an": er bleibt grau und zeigt seine Stellung als Fuellstand.
-  // Eine Regel aus "states:" ersetzt hier nur Symbol und Text, damit Schalter und Regler bleiben.
   if (domaene === "cover") {
     const position = s.attributes.current_position;
     const offen = s.state !== "closed";
-    const zustand = (regel && regel.text) || text;
+    const zustand = regel && regel.text || text;
     const mitPosition = offen && typeof position === "number" ? zustand + " · " + position + " %" : zustand;
     return Object.assign(basis, {
-      art: "rollladen", an: offen, ton: "aus", farbe: FARBEN.aus,
-      symbol: (regel && regel.icon) || symbol, text: mitPosition, position,
+      art: "rollladen",
+      an: offen,
+      ton: "aus",
+      farbe: FARBEN.aus,
+      symbol: regel && regel.icon || symbol,
+      text: mitPosition,
+      position,
       geschlossen: typeof position === "number" ? 100 - position : offen ? 0 : 100
     });
   }
-
-  // Eigene Regel je Zustand aus "states:" geht der Erkennung nach Domaene vor
   if (regel) {
     const farbe = regelfarbe(regel.color);
     return Object.assign(basis, {
@@ -221,201 +157,51 @@ function bewerteGeraet(hass, geraet) {
       text: regel.text || text
     });
   }
-
   if (SCHALTBARE_DOMAENEN.includes(domaene)) {
     return Object.assign(basis, mitZustand(s.state === "on"), { art: "schalter", symbol, text });
   }
-
-  // Ein Melder ist gruen, solange alles in Ordnung ist, und rot bei Alarm
-  if (geraet.alarm === true || (domaene === "binary_sensor" && ALARMKLASSEN.includes(s.attributes.device_class))) {
+  if (geraet.alarm === true || domaene === "binary_sensor" && ALARMKLASSEN.includes(s.attributes.device_class)) {
     const alarm = s.state === "on";
     return Object.assign(basis, {
-      art: "status", an: true, ton: alarm ? "alarm" : "gut", farbe: alarm ? FARBEN.alarm : FARBEN.ok, symbol, text
+      art: "status",
+      an: true,
+      ton: alarm ? "alarm" : "gut",
+      farbe: alarm ? FARBEN.alarm : FARBEN.ok,
+      symbol,
+      text
     });
   }
-
   return Object.assign(basis, mitZustand(AKTIVE_ZUSTAENDE.includes(s.state)), { art: "status", symbol, text });
 }
-
 function mitZustand(an) {
   return { an, ton: an ? "aktiv" : "aus", farbe: an ? FARBEN.an : FARBEN.aus };
 }
-
-// Farbwort aus "states:" in eine Farbe; grey und off bedeuten "aus" und ergeben null.
-// Rot ist hier nur eine Farbe, kein Alarm: es pulsiert nicht und faerbt die Karte nicht.
-const REGELFARBEN = { yellow: FARBEN.an, on: FARBEN.an, green: FARBEN.ok, red: FARBEN.alarm };
-
+var REGELFARBEN = { yellow: FARBEN.an, on: FARBEN.an, green: FARBEN.ok, red: FARBEN.alarm };
 function regelfarbe(wort) {
   if (!wort || wort === "grey" || wort === "off") return null;
   return REGELFARBEN[wort] || wort;
 }
-
-// Ein ausgeschalteter Schalter zeigt nur "Aus", seine Restleistung ist ohne Aussage
 function zustandHtml(hass, b) {
-  const mitLeistung = b.leistung !== null && b.leistung !== undefined && !(b.art === "schalter" && !b.an);
+  const mitLeistung = b.leistung !== null && b.leistung !== void 0 && !(b.art === "schalter" && !b.an);
   const leistung = mitLeistung ? ' · <span class="leistung">' + leistungText(hass, b.leistung) + "</span>" : "";
   return esc(b.text) + leistung;
 }
-
-// Gemeinsame Merkmale eines Chips auf der Karte und im Pop-up
 function chipMerkmale(b) {
   const rollladen = b.art === "rollladen";
-  return ' data-an="' + (rollladen ? false : b.an) + '" data-ton="' + b.ton + '"' +
-    ' style="--farbe:' + esc(b.farbe) + (rollladen ? ";--zu:" + b.geschlossen + "%" : "") + '"';
+  return ' data-an="' + (rollladen ? false : b.an) + '" data-ton="' + b.ton + '" style="--farbe:' + esc(b.farbe) + (rollladen ? ";--zu:" + b.geschlossen + "%" : "") + '"';
 }
-
 function chipKlassen(b) {
   return "chip" + (b.art === "rollladen" ? " rollladen" : "");
 }
-
-// Langes Halten oeffnet das Detailfenster nur bei Geraeten, die sich bedienen lassen
 function istHaltbar(b) {
-  return Boolean(b.entity) && b.stateObj !== undefined && (b.art === "schalter" || b.art === "rollladen");
+  return Boolean(b.entity) && b.stateObj !== void 0 && (b.art === "schalter" || b.art === "rollladen");
 }
-
 function zeigtChip(geraet) {
-  return geraet.chip !== undefined ? geraet.chip !== false : Boolean(geraet.entity);
+  return geraet.chip !== void 0 ? geraet.chip !== false : Boolean(geraet.entity);
 }
 
-/* ----------------------------------------------------------- Diagramme */
-
-const STUNDEN_LEISTUNG = 24;
-const ABSCHNITTE_LEISTUNG = 96;
-const TAGE_ENERGIE = 30;
-const ERSATZFARBEN = ["#5aa9e6", "#e8663d", "#4caf50", "#a07ad8", "#f2b632", "#9fb3c4", "#d35d8f"];
-
-function zeigtLeistungsverlauf(geraet) {
-  return Boolean(geraet.power) && geraet.graph !== false;
-}
-
-// Farbe eines Geraets im Diagramm: eigene Farbe, sonst reihum aus den Ersatzfarben
-function diagrammfarbe(geraet, reihe) {
-  return geraet.color || ERSATZFARBEN[reihe % ERSATZFARBEN.length];
-}
-
-// Zeitpunkt eines Verlaufseintrags in ms; Home Assistant liefert Sekunden
-function verlaufszeit(eintrag) {
-  const sekunden = eintrag.lu !== undefined ? eintrag.lu : eintrag.lc;
-  return sekunden * 1000;
-}
-
-/**
- * Teilt den Zeitraum in gleich lange Abschnitte und nimmt je Abschnitt den
- * hoechsten Wert, damit kurze Lastspitzen sichtbar bleiben. Ein Abschnitt ohne
- * eigenen Eintrag erbt den zuletzt gueltigen Wert.
- */
-function abschnittsmaxima(eintraege, start, ende, anzahl) {
-  const dauer = (ende - start) / anzahl;
-  const punkte = eintraege
-    .map((e) => ({ zeit: verlaufszeit(e), wert: parseFloat(e.s) }))
-    .sort((a, b) => a.zeit - b.zeit);
-  const werte = [];
-  let index = 0;
-  let zuletzt = null;
-  while (index < punkte.length && punkte[index].zeit <= start) {
-    zuletzt = Number.isFinite(punkte[index].wert) ? punkte[index].wert : null;
-    index++;
-  }
-  for (let i = 0; i < anzahl; i++) {
-    const abschnittsende = start + (i + 1) * dauer;
-    let maximum = zuletzt;
-    while (index < punkte.length && punkte[index].zeit < abschnittsende) {
-      zuletzt = Number.isFinite(punkte[index].wert) ? punkte[index].wert : null;
-      if (zuletzt !== null && (maximum === null || zuletzt > maximum)) maximum = zuletzt;
-      index++;
-    }
-    werte.push(maximum === null ? 0 : maximum);
-  }
-  return werte;
-}
-
-// Beginn der letzten n Tage in Ortszeit, aeltester zuerst, heute zuletzt
-function tagesanfaenge(jetzt, tage) {
-  const heute = new Date(jetzt);
-  heute.setHours(0, 0, 0, 0);
-  const anfaenge = [];
-  for (let i = tage - 1; i >= 0; i--) {
-    const tag = new Date(heute);
-    tag.setDate(heute.getDate() - i);
-    anfaenge.push(tag.getTime());
-  }
-  return anfaenge;
-}
-
-// Statistikbeginn in ms; je nach Home-Assistant-Version Zahl oder ISO-Text
-function statistikzeit(eintrag) {
-  return typeof eintrag.start === "number" ? eintrag.start : Date.parse(eintrag.start);
-}
-
-// Ordnet die Tagesaenderungen der Statistik den Tagen zu; negative Werte (Zaehlerwechsel) zaehlen nicht
-function energieJeTag(eintraege, anfaenge) {
-  const jeTag = new Map();
-  (eintraege || []).forEach((e) => {
-    const tag = new Date(statistikzeit(e));
-    tag.setHours(0, 0, 0, 0);
-    jeTag.set(tag.getTime(), Math.max(0, e.change || 0));
-  });
-  return anfaenge.map((anfang) => jeTag.get(anfang) || 0);
-}
-
-// Summe aller Reihen je Abschnitt
-function abschnittssummen(reihen) {
-  return reihen[0].werte.map((_, i) => reihen.reduce((s, r) => s + r.werte[i], 0));
-}
-
-// Gestapelte Flaechen: je Geraet eine Schicht, die Oberkante ist die Raumleistung
-function flaechenSvg(reihen) {
-  const anzahl = reihen[0].werte.length;
-  const maximum = Math.max.apply(null, abschnittssummen(reihen).concat([1]));
-  const x = (i) => ((i / (anzahl - 1)) * 100).toFixed(2);
-  const y = (w) => (56 - (w / maximum) * 52).toFixed(2);
-  let unten = new Array(anzahl).fill(0);
-  const schichten = reihen.map((r) => {
-    const oben = unten.map((u, i) => u + r.werte[i]);
-    const oberkante = oben.map((w, i) => x(i) + "," + y(w));
-    const unterkante = unten.map((w, i) => x(i) + "," + y(w)).reverse();
-    unten = oben;
-    return '<polygon points="' + oberkante.concat(unterkante).join(" ") + '" fill="' + esc(r.farbe) + '" fill-opacity="0.85"/>';
-  });
-  return '<svg viewBox="0 0 100 56" preserveAspectRatio="none" aria-hidden="true">' + schichten.join("") + "</svg>";
-}
-
-// Inhalt des Tooltips: Ueberschrift, je Geraet mit Verbrauch eine Zeile, bei mehreren die Summe
-function tippHtml(titel, eintraege, format) {
-  const mitWert = eintraege.filter((e) => e.wert > 0);
-  const zeilen = mitWert.map((e) =>
-    '<div class="z"><span><i style="background:' + esc(e.farbe) + '"></i>' + esc(e.name) + "</span><span>" + format(e.wert) + "</span></div>"
-  );
-  const summe = mitWert.reduce((s, e) => s + e.wert, 0);
-  return '<div class="titel">' + esc(titel) + "</div>" +
-    (zeilen.length ? zeilen.join("") : '<div class="z"><span>Kein Verbrauch</span></div>') +
-    (zeilen.length > 1 ? '<div class="z summe"><span>Summe</span><span>' + format(summe) + "</span></div>" : "");
-}
-
-// Gestapelte Tagesbalken: je Tag die Geraete des Raums uebereinander
-function stapelSvg(reihen) {
-  const tage = reihen[0].werte.length;
-  const summen = [];
-  for (let t = 0; t < tage; t++) summen.push(reihen.reduce((s, r) => s + r.werte[t], 0));
-  const maximum = Math.max.apply(null, summen.concat([0.001]));
-  const breite = 100 / tage;
-  let rechtecke = "";
-  for (let t = 0; t < tage; t++) {
-    let unten = 56;
-    reihen.forEach((r) => {
-      const hoehe = (r.werte[t] / maximum) * 52;
-      if (hoehe <= 0) return;
-      unten -= hoehe;
-      rechtecke += '<rect x="' + (t * breite + 0.4).toFixed(2) + '" y="' + unten.toFixed(2) + '" width="' +
-        (breite - 0.8).toFixed(2) + '" height="' + hoehe.toFixed(2) + '" fill="' + esc(r.farbe) + '"/>';
-    });
-  }
-  return '<svg viewBox="0 0 100 56" preserveAspectRatio="none" aria-hidden="true">' + rechtecke + "</svg>";
-}
-
-/* --------------------------------------------------------------- Stile */
-
-const GEMEINSAME_STILE = `
+// src/stile.js
+var GEMEINSAME_STILE = `
   :host {
     --rsc-text: var(--primary-text-color, #e6eaee);
     --rsc-gedaempft: var(--secondary-text-color, #8d97a1);
@@ -456,8 +242,7 @@ const GEMEINSAME_STILE = `
     .chip[data-ton="alarm"] { animation: none; }
   }
 `;
-
-const KARTENSTILE = `
+var KARTENSTILE = `
   :host { display: block; }
   .raum {
     box-sizing: border-box; height: 100%; padding: 12px; overflow: hidden;
@@ -535,8 +320,7 @@ const KARTENSTILE = `
   @keyframes halten { from { --rqc-halten: 0deg; } to { --rqc-halten: 360deg; } }
   @media (prefers-reduced-motion: reduce) { .raum { transition: none; } }
 `;
-
-const POPUPSTILE = `
+var POPUPSTILE = `
   .abdunklung {
     position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.55);
     display: grid; place-items: center; padding: 16px; box-sizing: border-box;
@@ -653,13 +437,11 @@ const POPUPSTILE = `
   }
 `;
 
-/* ---------------------------------------------------------------- Karte */
-
-class RoomQuickviewCard extends HTMLElement {
+// src/karte.js
+var RoomQuickviewCard = class extends HTMLElement {
   static getStubConfig() {
     return { name: "Raum", icon: "mdi:sofa", devices: [] };
   }
-
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -667,7 +449,6 @@ class RoomQuickviewCard extends HTMLElement {
     this._popup = null;
     this.shadowRoot.addEventListener("click", (e) => this._beiKlick(e));
     this.shadowRoot.addEventListener("keydown", (e) => this._beiTaste(e));
-    // scroll steigt nicht auf, deshalb in der Einfangphase
     this.shadowRoot.addEventListener("scroll", (e) => {
       if (e.target.classList && e.target.classList.contains("chips")) this._ueberlaufMarkieren();
     }, true);
@@ -677,68 +458,56 @@ class RoomQuickviewCard extends HTMLElement {
     ["pointerup", "pointercancel", "pointerleave"].forEach((typ) => {
       this.shadowRoot.addEventListener(typ, () => this._haltenAbbrechen(), true);
     });
-    // Langes Druecken soll kein Kontextmenue und keine Textauswahl ausloesen
     this.shadowRoot.addEventListener("contextmenu", (e) => {
       if (e.target.closest(".chip.haltbar")) e.preventDefault();
     });
   }
-
   setConfig(config) {
     if (!config || !config.name) throw new Error("room-quickview-card: name fehlt");
-    if (config.devices !== undefined && !Array.isArray(config.devices)) {
+    if (config.devices !== void 0 && !Array.isArray(config.devices)) {
       throw new Error("room-quickview-card: devices muss eine Liste sein");
     }
-    if (config.cards !== undefined && !Array.isArray(config.cards)) {
+    if (config.cards !== void 0 && !Array.isArray(config.cards)) {
       throw new Error("room-quickview-card: cards muss eine Liste sein");
     }
-    const geraete = (config.devices || []).map((g) => (typeof g === "string" ? { entity: g } : g));
-    if (geraete.some((g) => g.cards !== undefined && !Array.isArray(g.cards))) {
+    const geraete = (config.devices || []).map((g) => typeof g === "string" ? { entity: g } : g);
+    if (geraete.some((g) => g.cards !== void 0 && !Array.isArray(g.cards))) {
       throw new Error("room-quickview-card: cards eines Geraets muss eine Liste sein");
     }
     this._config = Object.assign({}, config, { devices: geraete });
     this._signatur = "";
     if (this._hass) this._aktualisieren();
   }
-
   set hass(hass) {
     this._hass = hass;
     this._aktualisieren();
     if (this._popup) this._popup.hass = hass;
   }
-
   getCardSize() {
     return 3;
   }
-
   getGridOptions() {
     return { columns: 12, min_columns: 6, rows: "auto" };
   }
-
   connectedCallback() {
     this._groesse.observe(this);
   }
-
   disconnectedCallback() {
     this._groesse.disconnect();
     this._popupSchliessen();
   }
-
   // Neu gezeichnet wird nur, wenn sich eine beteiligte Entitaet geaendert hat
   _aktualisieren() {
     if (!this._config || !this._hass) return;
-    // Waehrend gehalten wird, wuerde Neuzeichnen den Ring entfernen; es folgt nach dem Halten
     if (this._halten) return;
-    const signatur = this._beteiligteEntitaeten()
-      .map((id) => {
-        const s = this._hass.states[id];
-        return id + "=" + (s ? s.state + "@" + s.last_updated : "-");
-      })
-      .join("|");
+    const signatur = this._beteiligteEntitaeten().map((id) => {
+      const s = this._hass.states[id];
+      return id + "=" + (s ? s.state + "@" + s.last_updated : "-");
+    }).join("|");
     if (signatur === this._signatur) return;
     this._signatur = signatur;
     this._zeichnen();
   }
-
   _beteiligteEntitaeten() {
     const c = this._config;
     const ids = [c.temperature, c.humidity];
@@ -748,13 +517,11 @@ class RoomQuickviewCard extends HTMLElement {
     });
     return ids.filter(Boolean);
   }
-
   _zeichnen() {
     const hass = this._hass;
     const c = this._config;
     const alteChips = this.shadowRoot.querySelector(".chips");
     const scrollStand = alteChips ? alteChips.scrollLeft : 0;
-
     const bewertungen = c.devices.map((g) => bewerteGeraet(hass, g));
     const werte = [];
     const temperatur = zahlAus(hass, c.temperature, "current_temperature");
@@ -770,37 +537,18 @@ class RoomQuickviewCard extends HTMLElement {
       const summe = leistungen.reduce((a, b) => a + b, 0);
       werte.push('<span class="leistung"><ha-icon icon="mdi:flash"></ha-icon>' + leistungText(hass, summe) + "</span>");
     }
-
-    const chips = c.devices
-      .map((g, i) => {
-        if (!zeigtChip(g) || !istSichtbar(hass, g)) return "";
-        const b = bewertungen[i];
-        return '<button type="button" class="' + chipKlassen(b) + (istHaltbar(b) ? " haltbar" : "") + '" data-index="' + i + '"' + chipMerkmale(b) +
-          ' title="' + esc(b.name) + '"' +
-          ' aria-label="' + esc(b.name) + ", " + esc(b.text) + ', Details öffnen">' +
-          '<ha-icon icon="' + esc(b.symbol) + '"></ha-icon></button>';
-      })
-      .join("");
-
-    const klickbar = c.devices.length > 0 || (c.cards && c.cards.length > 0);
+    const chips = c.devices.map((g, i) => {
+      if (!zeigtChip(g) || !istSichtbar(hass, g)) return "";
+      const b = bewertungen[i];
+      return '<button type="button" class="' + chipKlassen(b) + (istHaltbar(b) ? " haltbar" : "") + '" data-index="' + i + '"' + chipMerkmale(b) + ' title="' + esc(b.name) + '" aria-label="' + esc(b.name) + ", " + esc(b.text) + ', Details öffnen"><ha-icon icon="' + esc(b.symbol) + '"></ha-icon></button>';
+    }).join("");
+    const klickbar = c.devices.length > 0 || c.cards && c.cards.length > 0;
     const alarm = bewertungen.some((b) => b.ton === "alarm");
-
-    this.shadowRoot.innerHTML =
-      "<style>" + GEMEINSAME_STILE + KARTENSTILE + "</style>" +
-      '<div class="raum' + (klickbar ? " klickbar" : "") + (alarm ? " alarm" : "") + '"' +
-        (klickbar ? ' role="button" tabindex="0" aria-label="' + esc(c.name) + ', Details öffnen"' : "") + ">" +
-        '<div class="raumkopf">' +
-          '<div class="raumsymbol"><ha-icon icon="' + esc(c.icon || "mdi:home") + '"></ha-icon></div>' +
-          '<div class="raumtext"><div class="raumname">' + esc(c.name) + '</div><div class="raumwerte">' + werte.join("") + "</div></div>" +
-          '<div class="chips">' + chips + "</div>" +
-        "</div>" +
-      "</div>";
-
+    this.shadowRoot.innerHTML = "<style>" + GEMEINSAME_STILE + KARTENSTILE + '</style><div class="raum' + (klickbar ? " klickbar" : "") + (alarm ? " alarm" : "") + '"' + (klickbar ? ' role="button" tabindex="0" aria-label="' + esc(c.name) + ', Details öffnen"' : "") + '><div class="raumkopf"><div class="raumsymbol"><ha-icon icon="' + esc(c.icon || "mdi:home") + '"></ha-icon></div><div class="raumtext"><div class="raumname">' + esc(c.name) + '</div><div class="raumwerte">' + werte.join("") + '</div></div><div class="chips">' + chips + "</div></div></div>";
     const neueChips = this.shadowRoot.querySelector(".chips");
     neueChips.scrollLeft = scrollStand;
     this._ueberlaufMarkieren();
   }
-
   // Blendet die Chip-Zeile an der Seite aus, hinter der noch Chips liegen
   _ueberlaufMarkieren() {
     const chips = this.shadowRoot.querySelector(".chips");
@@ -809,9 +557,7 @@ class RoomQuickviewCard extends HTMLElement {
     chips.classList.toggle("links", chips.scrollLeft > 1);
     chips.classList.toggle("rechts", rest > 1);
   }
-
   _beiKlick(e) {
-    // Der Klick nach einem vollendeten Halten oeffnet nicht zusaetzlich das Raum-Pop-up
     if (this._gehaltenBeendet) {
       this._gehaltenBeendet = false;
       return;
@@ -820,9 +566,7 @@ class RoomQuickviewCard extends HTMLElement {
     const chip = e.target.closest(".chip");
     this._popupOeffnen(chip ? Number(chip.dataset.index) : null);
   }
-
   /* ------------------------------------------------- langes Halten */
-
   // Halten auf dem Symbol eines bedienbaren Geraets oeffnet nach HALTEDAUER_MS dessen Detailfenster.
   // Ein Ring zeigt den Fortschritt; Bewegung, Scrollen oder Loslassen brechen ab.
   _haltenBeginnen(e) {
@@ -837,16 +581,16 @@ class RoomQuickviewCard extends HTMLElement {
       this._haltenAbbrechen();
       this._gehaltenBeendet = true;
       this.dispatchEvent(new CustomEvent("hass-more-info", {
-        detail: { entityId: geraet.entity }, bubbles: true, composed: true
+        detail: { entityId: geraet.entity },
+        bubbles: true,
+        composed: true
       }));
     }, HALTEDAUER_MS);
   }
-
   _haltenPruefen(e) {
     if (!this._halten) return;
     if (Math.hypot(e.clientX - this._halten.x, e.clientY - this._halten.y) > BEWEGUNGSSCHWELLE_PX) this._haltenAbbrechen();
   }
-
   _haltenAbbrechen() {
     if (!this._halten) return;
     clearTimeout(this._halten.zeitgeber);
@@ -856,7 +600,6 @@ class RoomQuickviewCard extends HTMLElement {
     this._halten = null;
     this._aktualisieren();
   }
-
   // Ring als eigene Ebene in der Karte, um das Symbol herum ausgerichtet
   _halteringAnlegen(chip) {
     const raum = this.shadowRoot.querySelector(".raum");
@@ -864,22 +607,20 @@ class RoomQuickviewCard extends HTMLElement {
     const c = chip.getBoundingClientRect();
     const ring = document.createElement("div");
     ring.className = "haltering";
-    ring.style.left = (c.left - r.left - raum.clientLeft - HALTERING_ABSTAND_PX) + "px";
-    ring.style.top = (c.top - r.top - raum.clientTop - HALTERING_ABSTAND_PX) + "px";
-    ring.style.width = (c.width + 2 * HALTERING_ABSTAND_PX) + "px";
-    ring.style.height = (c.height + 2 * HALTERING_ABSTAND_PX) + "px";
+    ring.style.left = c.left - r.left - raum.clientLeft - HALTERING_ABSTAND_PX + "px";
+    ring.style.top = c.top - r.top - raum.clientTop - HALTERING_ABSTAND_PX + "px";
+    ring.style.width = c.width + 2 * HALTERING_ABSTAND_PX + "px";
+    ring.style.height = c.height + 2 * HALTERING_ABSTAND_PX + "px";
     raum.classList.add("haelt");
     raum.appendChild(ring);
     return ring;
   }
-
   _beiTaste(e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("raum") && e.target.classList.contains("klickbar")) {
       e.preventDefault();
       this._popupOeffnen(null);
     }
   }
-
   _popupOeffnen(index) {
     this._popupSchliessen();
     const popup = document.createElement("room-quickview-card-popup");
@@ -889,22 +630,122 @@ class RoomQuickviewCard extends HTMLElement {
       if (raum) raum.focus();
     }, this);
     popup.hass = this._hass;
-    // Im Shadow Root von home-assistant oeffnet Home Assistant auch seine eigenen Dialoge.
-    // Nur dort erreichen eingebettete Karten Theme und Kontext der Oberflaeche; ohne Home
-    // Assistant, etwa auf der Testseite, bleibt document.body.
     const wirt = document.querySelector("home-assistant");
     (wirt && wirt.shadowRoot ? wirt.shadowRoot : document.body).appendChild(popup);
     this._popup = popup;
   }
-
   _popupSchliessen() {
     if (this._popup) this._popup.schliessen();
   }
+};
+
+// src/diagramme.js
+var STUNDEN_LEISTUNG = 24;
+var ABSCHNITTE_LEISTUNG = 96;
+var TAGE_ENERGIE = 30;
+var ERSATZFARBEN = ["#5aa9e6", "#e8663d", "#4caf50", "#a07ad8", "#f2b632", "#9fb3c4", "#d35d8f"];
+function zeigtLeistungsverlauf(geraet) {
+  return Boolean(geraet.power) && geraet.graph !== false;
+}
+function diagrammfarbe(geraet, reihe) {
+  return geraet.color || ERSATZFARBEN[reihe % ERSATZFARBEN.length];
+}
+function verlaufszeit(eintrag) {
+  const sekunden = eintrag.lu !== void 0 ? eintrag.lu : eintrag.lc;
+  return sekunden * 1e3;
+}
+function abschnittsmaxima(eintraege, start, ende, anzahl) {
+  const dauer = (ende - start) / anzahl;
+  const punkte = eintraege.map((e) => ({ zeit: verlaufszeit(e), wert: parseFloat(e.s) })).sort((a, b) => a.zeit - b.zeit);
+  const werte = [];
+  let index = 0;
+  let zuletzt = null;
+  while (index < punkte.length && punkte[index].zeit <= start) {
+    zuletzt = Number.isFinite(punkte[index].wert) ? punkte[index].wert : null;
+    index++;
+  }
+  for (let i = 0; i < anzahl; i++) {
+    const abschnittsende = start + (i + 1) * dauer;
+    let maximum = zuletzt;
+    while (index < punkte.length && punkte[index].zeit < abschnittsende) {
+      zuletzt = Number.isFinite(punkte[index].wert) ? punkte[index].wert : null;
+      if (zuletzt !== null && (maximum === null || zuletzt > maximum)) maximum = zuletzt;
+      index++;
+    }
+    werte.push(maximum === null ? 0 : maximum);
+  }
+  return werte;
+}
+function tagesanfaenge(jetzt, tage) {
+  const heute = new Date(jetzt);
+  heute.setHours(0, 0, 0, 0);
+  const anfaenge = [];
+  for (let i = tage - 1; i >= 0; i--) {
+    const tag = new Date(heute);
+    tag.setDate(heute.getDate() - i);
+    anfaenge.push(tag.getTime());
+  }
+  return anfaenge;
+}
+function statistikzeit(eintrag) {
+  return typeof eintrag.start === "number" ? eintrag.start : Date.parse(eintrag.start);
+}
+function energieJeTag(eintraege, anfaenge) {
+  const jeTag = /* @__PURE__ */ new Map();
+  (eintraege || []).forEach((e) => {
+    const tag = new Date(statistikzeit(e));
+    tag.setHours(0, 0, 0, 0);
+    jeTag.set(tag.getTime(), Math.max(0, e.change || 0));
+  });
+  return anfaenge.map((anfang) => jeTag.get(anfang) || 0);
+}
+function abschnittssummen(reihen) {
+  return reihen[0].werte.map((_, i) => reihen.reduce((s, r) => s + r.werte[i], 0));
+}
+function flaechenSvg(reihen) {
+  const anzahl = reihen[0].werte.length;
+  const maximum = Math.max.apply(null, abschnittssummen(reihen).concat([1]));
+  const x = (i) => (i / (anzahl - 1) * 100).toFixed(2);
+  const y = (w) => (56 - w / maximum * 52).toFixed(2);
+  let unten = new Array(anzahl).fill(0);
+  const schichten = reihen.map((r) => {
+    const oben = unten.map((u, i) => u + r.werte[i]);
+    const oberkante = oben.map((w, i) => x(i) + "," + y(w));
+    const unterkante = unten.map((w, i) => x(i) + "," + y(w)).reverse();
+    unten = oben;
+    return '<polygon points="' + oberkante.concat(unterkante).join(" ") + '" fill="' + esc(r.farbe) + '" fill-opacity="0.85"/>';
+  });
+  return '<svg viewBox="0 0 100 56" preserveAspectRatio="none" aria-hidden="true">' + schichten.join("") + "</svg>";
+}
+function tippHtml(titel, eintraege, format) {
+  const mitWert = eintraege.filter((e) => e.wert > 0);
+  const zeilen = mitWert.map(
+    (e) => '<div class="z"><span><i style="background:' + esc(e.farbe) + '"></i>' + esc(e.name) + "</span><span>" + format(e.wert) + "</span></div>"
+  );
+  const summe = mitWert.reduce((s, e) => s + e.wert, 0);
+  return '<div class="titel">' + esc(titel) + "</div>" + (zeilen.length ? zeilen.join("") : '<div class="z"><span>Kein Verbrauch</span></div>') + (zeilen.length > 1 ? '<div class="z summe"><span>Summe</span><span>' + format(summe) + "</span></div>" : "");
+}
+function stapelSvg(reihen) {
+  const tage = reihen[0].werte.length;
+  const summen = [];
+  for (let t = 0; t < tage; t++) summen.push(reihen.reduce((s, r) => s + r.werte[t], 0));
+  const maximum = Math.max.apply(null, summen.concat([1e-3]));
+  const breite = 100 / tage;
+  let rechtecke = "";
+  for (let t = 0; t < tage; t++) {
+    let unten = 56;
+    reihen.forEach((r) => {
+      const hoehe = r.werte[t] / maximum * 52;
+      if (hoehe <= 0) return;
+      unten -= hoehe;
+      rechtecke += '<rect x="' + (t * breite + 0.4).toFixed(2) + '" y="' + unten.toFixed(2) + '" width="' + (breite - 0.8).toFixed(2) + '" height="' + hoehe.toFixed(2) + '" fill="' + esc(r.farbe) + '"/>';
+    });
+  }
+  return '<svg viewBox="0 0 100 56" preserveAspectRatio="none" aria-hidden="true">' + rechtecke + "</svg>";
 }
 
-/* --------------------------------------------------------------- Pop-up */
-
-class RoomQuickviewCardPopup extends HTMLElement {
+// src/popup.js
+var RoomQuickviewCardPopup = class extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -918,7 +759,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
     WEITERZUREICHENDE_EREIGNISSE.forEach((typ) => {
       this.shadowRoot.addEventListener(typ, (e) => this._weiterreichen(e));
     });
-    // Waehrend der Regler gezogen wird, darf ein Neuzeichnen ihn nicht zuruecksetzen
     this.shadowRoot.addEventListener("pointerdown", (e) => {
       if (!e.target.classList.contains("regler")) return;
       this._zieht = true;
@@ -934,14 +774,12 @@ class RoomQuickviewCardPopup extends HTMLElement {
       if (this._hass) this._aktualisieren();
     };
   }
-
   konfigurieren(config, markiert, beimSchliessen, quelle) {
     this._config = config;
     this._markiert = markiert;
     this._beimSchliessen = beimSchliessen;
     this._quelle = quelle;
   }
-
   // Ereignisse wie hass-more-info gehen ueber die Raumkarte weiter, damit Home Assistant sie
   // auch dann erreicht, wenn das Pop-up ausnahmsweise an document.body haengt.
   // Oeffnet sich ein Detailfenster, schliesst das Pop-up, sonst laege es darueber.
@@ -953,13 +791,13 @@ class RoomQuickviewCardPopup extends HTMLElement {
     }
     if (e.type === "hass-more-info" || e.type === "show-dialog") this.schliessen();
   }
-
   set hass(hass) {
     this._hass = hass;
-    if (this._karten) this._karten.forEach((k) => { k.hass = hass; });
+    if (this._karten) this._karten.forEach((k) => {
+      k.hass = hass;
+    });
     if (this.isConnected) this._aktualisieren();
   }
-
   connectedCallback() {
     document.addEventListener("keydown", this._beiTasteGebunden);
     document.addEventListener("pointerup", this._loslassenGebunden);
@@ -968,41 +806,32 @@ class RoomQuickviewCardPopup extends HTMLElement {
     this._zeichnen();
     const schliessen = this.shadowRoot.querySelector(".schliessen");
     if (schliessen) schliessen.focus();
-    if (this._markiert !== null && this._markiert !== undefined) {
+    if (this._markiert !== null && this._markiert !== void 0) {
       const zeile = this.shadowRoot.querySelector('.geraet[data-index="' + this._markiert + '"]');
       if (zeile) zeile.scrollIntoView({ block: "nearest" });
     }
   }
-
   disconnectedCallback() {
     document.removeEventListener("keydown", this._beiTasteGebunden);
     document.removeEventListener("pointerup", this._loslassenGebunden);
     document.removeEventListener("pointercancel", this._loslassenGebunden);
   }
-
   schliessen() {
     if (!this.isConnected) return;
     this.remove();
     if (this._beimSchliessen) this._beimSchliessen();
   }
-
   // Neu gezeichnet wird nur, wenn sich eine beteiligte Entitaet geaendert hat
   _aktualisieren() {
     if (this._zieht) return;
-    const signatur = this._config.devices
-      .map((g) => [g.entity, g.power, g.show_when && (g.show_when.entity || g.show_when)]
-        .filter(Boolean)
-        .map((id) => {
-          const s = this._hass.states[id];
-          return s ? s.state + "@" + s.last_updated : "-";
-        })
-        .join(","))
-      .join("|");
+    const signatur = this._config.devices.map((g) => [g.entity, g.power, g.show_when && (g.show_when.entity || g.show_when)].filter(Boolean).map((id) => {
+      const s = this._hass.states[id];
+      return s ? s.state + "@" + s.last_updated : "-";
+    }).join(",")).join("|");
     if (signatur === this._signatur) return;
     this._signatur = signatur;
     this._zeichnen();
   }
-
   // Das Geruest entsteht einmal; danach werden nur die Geraetezeilen und die Verlaeufe erneuert,
   // damit eingebettete Karten bestehen bleiben und ihre Daten nicht neu laden
   _zeichnen() {
@@ -1010,7 +839,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
     const c = this._config;
     if (!hass || !c) return;
     if (!this.shadowRoot.querySelector(".popup")) this._geruestBauen();
-
     c.devices.forEach((g, i) => {
       const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
       const sichtbar = istSichtbar(hass, g);
@@ -1020,28 +848,12 @@ class RoomQuickviewCardPopup extends HTMLElement {
     this.shadowRoot.querySelector(".verlaeufe").innerHTML = this._verlaeufeHtml();
     this._diagrammeVerdrahten();
   }
-
   // Je Geraet ein Eintrag aus Zeile und den Karten des Geraets; nur die Zeile wird neu gezeichnet
   _geruestBauen() {
-    const eintraege = this._config.devices
-      .map((_, i) => '<div class="eintrag" data-index="' + i + '"><div class="zeile"></div><div class="geraetkarten"></div></div>')
-      .join("");
-    this.shadowRoot.innerHTML =
-      "<style>" + GEMEINSAME_STILE + POPUPSTILE + "</style>" +
-      '<div class="abdunklung">' +
-        '<div class="popup" role="dialog" aria-modal="true" aria-labelledby="titel">' +
-          '<div class="popupkopf">' +
-            '<button type="button" class="schliessen" aria-label="Schließen" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button>' +
-            '<h2 id="titel">' + esc(this._config.name) + "</h2>" +
-            "</div>" +
-          '<div class="liste">' + eintraege + "</div>" +
-          '<div class="karten"></div>' +
-          '<div class="verlaeufe"></div>' +
-        "</div>" +
-      "</div>";
+    const eintraege = this._config.devices.map((_, i) => '<div class="eintrag" data-index="' + i + '"><div class="zeile"></div><div class="geraetkarten"></div></div>').join("");
+    this.shadowRoot.innerHTML = "<style>" + GEMEINSAME_STILE + POPUPSTILE + '</style><div class="abdunklung"><div class="popup" role="dialog" aria-modal="true" aria-labelledby="titel"><div class="popupkopf"><button type="button" class="schliessen" aria-label="Schließen" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button><h2 id="titel">' + esc(this._config.name) + '</h2></div><div class="liste">' + eintraege + '</div><div class="karten"></div><div class="verlaeufe"></div></div></div>';
     this._kartenEinsetzen();
   }
-
   // Zusatzkarten aus "cards:" des Raums und der Geraete erzeugt Home Assistant selbst,
   // damit jede bekannte Karte geht
   async _kartenEinsetzen() {
@@ -1055,7 +867,9 @@ class RoomQuickviewCardPopup extends HTMLElement {
     const gefuellt = ablagen.filter((a) => a.konfigurationen.length);
     if (!gefuellt.length) return;
     if (typeof window.loadCardHelpers !== "function") {
-      gefuellt.forEach((a) => { a.ablage.innerHTML = '<div class="hinweis">Zusatzkarten nicht verfügbar</div>'; });
+      gefuellt.forEach((a) => {
+        a.ablage.innerHTML = '<div class="hinweis">Zusatzkarten nicht verfügbar</div>';
+      });
       return;
     }
     const helfer = await window.loadCardHelpers();
@@ -1070,9 +884,7 @@ class RoomQuickviewCardPopup extends HTMLElement {
       a.ablage.append(...karten);
     });
   }
-
   /* ------------------------------------------------------- Tooltips */
-
   // Maus: folgt dem Zeiger, verschwindet beim Verlassen. Finger: bleibt nach dem Antippen stehen.
   _diagrammeVerdrahten() {
     this.shadowRoot.querySelectorAll(".flaeche[data-diagramm]").forEach((flaeche) => {
@@ -1084,7 +896,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
       });
     });
   }
-
   _tippZeigen(flaeche, clientX) {
     const art = flaeche.dataset.diagramm;
     const d = this._diagramme && this._diagramme[art];
@@ -1100,7 +911,7 @@ class RoomQuickviewCardPopup extends HTMLElement {
     let format;
     if (art === "leistung") {
       index = Math.round(anteil * (anzahl - 1));
-      markeLinks = (index / (anzahl - 1)) * 100;
+      markeLinks = index / (anzahl - 1) * 100;
       markeBreite = 0;
       const uhr = new Intl.DateTimeFormat(sprache(hass), { hour: "2-digit", minute: "2-digit" });
       titel = uhr.format(new Date(d.start + index * d.dauer)) + "–" + uhr.format(new Date(d.start + (index + 1) * d.dauer));
@@ -1109,12 +920,10 @@ class RoomQuickviewCardPopup extends HTMLElement {
       index = Math.min(anzahl - 1, Math.floor(anteil * anzahl));
       markeBreite = 100 / anzahl;
       markeLinks = index * markeBreite;
-      titel = new Intl.DateTimeFormat(sprache(hass), { weekday: "short", day: "2-digit", month: "2-digit" })
-        .format(new Date(d.anfaenge[index]));
+      titel = new Intl.DateTimeFormat(sprache(hass), { weekday: "short", day: "2-digit", month: "2-digit" }).format(new Date(d.anfaenge[index]));
       format = (w) => zahlText(hass, w, 2) + " kWh";
     }
     const eintraege = d.reihen.map((r) => ({ name: r.name, farbe: r.farbe, wert: r.werte[index] }));
-
     let marke = flaeche.querySelector(".marke");
     let tipp = flaeche.querySelector(".tipp");
     if (!marke) {
@@ -1127,50 +936,30 @@ class RoomQuickviewCardPopup extends HTMLElement {
     marke.style.left = markeLinks + "%";
     marke.style.width = art === "leistung" ? "" : markeBreite + "%";
     tipp.innerHTML = tippHtml(titel, eintraege, format);
-
-    // Waagerecht mittig zur Markierung, aber nie ueber den Diagrammrand hinaus
     tipp.style.left = "0px";
     const breite = tipp.offsetWidth;
-    const mitte = ((markeLinks + markeBreite / 2) / 100) * rahmen.width;
+    const mitte = (markeLinks + markeBreite / 2) / 100 * rahmen.width;
     tipp.style.left = Math.min(rahmen.width - breite, Math.max(0, mitte - breite / 2)) + "px";
-    // Oberhalb, wenn im Pop-up genug Platz ist, sonst unterhalb
     const popupOben = this.shadowRoot.querySelector(".popup").getBoundingClientRect().top;
     const obenFrei = rahmen.top - popupOben > tipp.offsetHeight + 8;
     tipp.style.bottom = obenFrei ? "calc(100% + 6px)" : "";
     tipp.style.top = obenFrei ? "" : "calc(100% + 6px)";
   }
-
   _tippVerbergen(flaeche) {
     flaeche.querySelectorAll(".marke, .tipp").forEach((el) => el.remove());
   }
-
   _zeileHtml(geraet, b, index) {
     let rechts = "";
     let zusatz = "";
     if (b.art === "schalter") {
-      rechts = '<button type="button" class="schalter" role="switch" data-index="' + index + '" aria-checked="' + b.an + '"' +
-        ' aria-label="' + esc(b.name) + ' schalten"></button>';
+      rechts = '<button type="button" class="schalter" role="switch" data-index="' + index + '" aria-checked="' + b.an + '" aria-label="' + esc(b.name) + ' schalten"></button>';
     }
     if (b.art === "rollladen") {
-      zusatz = '<div class="zusatz">' + this._rollladenknoepfeHtml(b, index) +
-        (typeof b.position === "number"
-          ? '<div class="reglerrahmen"><input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="1"' +
-            ' value="' + b.position + '" aria-label="Position ' + esc(b.name) + '">' +
-            '<span class="reglerwert" aria-hidden="true" hidden></span></div>'
-          : "") +
-        "</div>";
+      zusatz = '<div class="zusatz">' + this._rollladenknoepfeHtml(b, index) + (typeof b.position === "number" ? '<div class="reglerrahmen"><input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="1" value="' + b.position + '" aria-label="Position ' + esc(b.name) + '"><span class="reglerwert" aria-hidden="true" hidden></span></div>' : "") + "</div>";
     }
-    const klassen = "geraet" +
-      (geraet.show_when ? " unter" : "") +
-      (index === this._markiert ? " hervorgehoben" : "");
-    return '<div class="' + klassen + '" data-index="' + index + '" style="--farbe:' + esc(b.farbe) + '">' +
-      '<span class="' + chipKlassen(b) + '" aria-hidden="true"' + chipMerkmale(b) + '><ha-icon icon="' + esc(b.symbol) + '"></ha-icon></span>' +
-      '<div class="gtext"><div class="gname">' + esc(b.name) + '</div><div class="gwert">' + zustandHtml(this._hass, b) + "</div>" +
-        this._attributHtml(geraet, b) + "</div>" +
-      rechts + zusatz +
-    "</div>";
+    const klassen = "geraet" + (geraet.show_when ? " unter" : "") + (index === this._markiert ? " hervorgehoben" : "");
+    return '<div class="' + klassen + '" data-index="' + index + '" style="--farbe:' + esc(b.farbe) + '"><span class="' + chipKlassen(b) + '" aria-hidden="true"' + chipMerkmale(b) + '><ha-icon icon="' + esc(b.symbol) + '"></ha-icon></span><div class="gtext"><div class="gname">' + esc(b.name) + '</div><div class="gwert">' + zustandHtml(this._hass, b) + "</div>" + this._attributHtml(geraet, b) + "</div>" + rechts + zusatz + "</div>";
   }
-
   // Laedt einmal beim Oeffnen den Leistungsverlauf der letzten 24 h und die Tagesenergie der letzten 30 Tage
   _datenLaden() {
     const hass = this._hass;
@@ -1180,9 +969,8 @@ class RoomQuickviewCardPopup extends HTMLElement {
     const energieIds = geraete.filter((g) => g.energy).map((g) => g.energy);
     this._leistung = leistungsIds.length ? "laedt" : null;
     this._energie = energieIds.length ? "laedt" : null;
-
     if (leistungsIds.length) {
-      const start = jetzt - STUNDEN_LEISTUNG * 3600 * 1000;
+      const start = jetzt - STUNDEN_LEISTUNG * 3600 * 1e3;
       hass.callWS({
         type: "history/history_during_period",
         start_time: new Date(start).toISOString(),
@@ -1200,7 +988,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
         this._zeichnen();
       });
     }
-
     if (energieIds.length) {
       const anfaenge = tagesanfaenge(jetzt, TAGE_ENERGIE);
       hass.callWS({
@@ -1221,7 +1008,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
       });
     }
   }
-
   _verlaeufeHtml() {
     this._diagramme = {};
     const leistung = this._leistungHtml();
@@ -1229,7 +1015,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
     if (!leistung && !energie) return "";
     return '<p class="zwischentitel">Verläufe</p>' + leistung + energie;
   }
-
   _leistungHtml() {
     const hass = this._hass;
     const geraete = this._config.devices.filter(zeigtLeistungsverlauf);
@@ -1254,16 +1039,13 @@ class RoomQuickviewCardPopup extends HTMLElement {
         start: l.start,
         dauer: (l.ende - l.start) / ABSCHNITTE_LEISTUNG
       };
-      inhalt = '<div class="flaeche" data-diagramm="leistung">' + flaechenSvg(reihen) + "</div>" +
-        '<div class="legende">' + reihen.map((r) => {
-          const jetzt = r.bewertung.leistung;
-          return '<span><i style="background:' + esc(r.farbe) + '"></i>' + esc(r.bewertung.name) +
-            (jetzt !== null ? " " + leistungText(hass, jetzt) : "") + "</span>";
-        }).join("") + "</div>";
+      inhalt = '<div class="flaeche" data-diagramm="leistung">' + flaechenSvg(reihen) + '</div><div class="legende">' + reihen.map((r) => {
+        const jetzt = r.bewertung.leistung;
+        return '<span><i style="background:' + esc(r.farbe) + '"></i>' + esc(r.bewertung.name) + (jetzt !== null ? " " + leistungText(hass, jetzt) : "") + "</span>";
+      }).join("") + "</div>";
     }
     return '<div class="diagramm"><div class="dkopf"><span>Leistung</span><span>' + kopfRechts + "</span></div>" + inhalt + "</div>";
   }
-
   _energieHtml() {
     const hass = this._hass;
     const geraete = this._config.devices.filter((g) => g.energy);
@@ -1285,36 +1067,25 @@ class RoomQuickviewCardPopup extends HTMLElement {
       const gesamt = summen.reduce((a, b) => a + b, 0);
       kopfRechts = TAGE_ENERGIE + " Tage · " + zahlText(hass, gesamt, 1) + " kWh";
       this._diagramme.energie = { reihen, anfaenge: e.anfaenge };
-      inhalt = '<div class="flaeche" data-diagramm="energie">' + stapelSvg(reihen) + "</div>" +
-        '<div class="legende">' + reihen.map((r, j) =>
-          '<span><i style="background:' + esc(r.farbe) + '"></i>' + esc(r.name) + " " + zahlText(hass, summen[j], 1) + " kWh · " +
-          (gesamt > 0 ? Math.round((summen[j] / gesamt) * 100) : 0) + " %</span>"
-        ).join("") + "</div>";
+      inhalt = '<div class="flaeche" data-diagramm="energie">' + stapelSvg(reihen) + '</div><div class="legende">' + reihen.map(
+        (r, j) => '<span><i style="background:' + esc(r.farbe) + '"></i>' + esc(r.name) + " " + zahlText(hass, summen[j], 1) + " kWh · " + (gesamt > 0 ? Math.round(summen[j] / gesamt * 100) : 0) + " %</span>"
+      ).join("") + "</div>";
     }
     return '<div class="diagramm"><div class="dkopf"><span>Energie je Tag</span><span>' + kopfRechts + "</span></div>" + inhalt + "</div>";
   }
-
   // Auf, Stopp, Zu; ganz offen sperrt Auf, ganz geschlossen sperrt Zu
   _rollladenknoepfeHtml(b, index) {
-    const ganzOffen = b.position === 100 || (b.position === undefined && b.stateObj.state === "open");
+    const ganzOffen = b.position === 100 || b.position === void 0 && b.stateObj.state === "open";
     const ganzZu = b.stateObj.state === "closed";
-    const knopf = (aktion, symbol, text, gesperrt) =>
-      '<button type="button" data-index="' + index + '" data-rollladen="' + aktion + '" aria-label="' + text + " " + esc(b.name) + '"' +
-        ' title="' + text + '"' + (gesperrt ? " disabled" : "") + '><ha-icon icon="' + symbol + '"></ha-icon></button>';
-    return '<div class="rollladenknoepfe">' +
-      knopf("open_cover", "mdi:arrow-up", "Auf", ganzOffen) +
-      knopf("stop_cover", "mdi:stop", "Stopp", false) +
-      knopf("close_cover", "mdi:arrow-down", "Zu", ganzZu) +
-      "</div>";
+    const knopf = (aktion, symbol, text, gesperrt) => '<button type="button" data-index="' + index + '" data-rollladen="' + aktion + '" aria-label="' + text + " " + esc(b.name) + '" title="' + text + '"' + (gesperrt ? " disabled" : "") + '><ha-icon icon="' + symbol + '"></ha-icon></button>';
+    return '<div class="rollladenknoepfe">' + knopf("open_cover", "mdi:arrow-up", "Auf", ganzOffen) + knopf("stop_cover", "mdi:stop", "Stopp", false) + knopf("close_cover", "mdi:arrow-down", "Zu", ganzZu) + "</div>";
   }
-
   // Zusatzzeile aus einem Attribut der Entitaet, etwa der Grund einer Lueftungsempfehlung
   _attributHtml(geraet, b) {
     const wert = geraet.attribute && b.stateObj && b.stateObj.attributes[geraet.attribute];
-    if (wert === undefined || wert === null || wert === "") return "";
+    if (wert === void 0 || wert === null || wert === "") return "";
     return '<div class="ghinweis">' + esc(wert) + "</div>";
   }
-
   _beiKlick(e) {
     if (!e.target.closest(".flaeche")) {
       this.shadowRoot.querySelectorAll(".flaeche").forEach((f) => this._tippVerbergen(f));
@@ -1331,7 +1102,6 @@ class RoomQuickviewCardPopup extends HTMLElement {
       this._hass.callService("cover", rollladen.dataset.rollladen, { entity_id: geraet.entity });
     }
   }
-
   _beiAenderung(e) {
     if (!e.target.classList.contains("regler")) return;
     this._zieht = false;
@@ -1339,29 +1109,38 @@ class RoomQuickviewCardPopup extends HTMLElement {
     const geraet = this._config.devices[Number(e.target.dataset.index)];
     this._hass.callService("cover", "set_cover_position", { entity_id: geraet.entity, position: Number(e.target.value) });
   }
-
   _reglerwertZeigen(regler) {
     const anzeige = regler.parentElement.querySelector(".reglerwert");
     anzeige.textContent = regler.value + " %";
     anzeige.style.setProperty("--wert", regler.value);
     anzeige.hidden = false;
   }
-
   _reglerwerteVerbergen() {
-    this.shadowRoot.querySelectorAll(".reglerwert").forEach((anzeige) => { anzeige.hidden = true; });
+    this.shadowRoot.querySelectorAll(".reglerwert").forEach((anzeige) => {
+      anzeige.hidden = true;
+    });
   }
-
   _schalten(geraet) {
     const s = this._hass.states[geraet.entity];
     if (!s) return;
     const domaene = domaeneVon(geraet.entity);
     this._hass.callService(domaene, s.state === "on" ? "turn_off" : "turn_on", { entity_id: geraet.entity });
   }
-}
+};
 
+// src/index.js
+var CARD_VERSION = "0.4.2";
+console.info(
+  `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
+  "color: #16181a; background: #f2b632; font-weight: 700;",
+  "color: #f2b632; background: #16181a;"
+);
+try {
+  CSS.registerProperty({ name: "--rqc-halten", syntax: "<angle>", inherits: false, initialValue: "0deg" });
+} catch (fehler) {
+}
 customElements.define("room-quickview-card", RoomQuickviewCard);
 customElements.define("room-quickview-card-popup", RoomQuickviewCardPopup);
-
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "room-quickview-card",

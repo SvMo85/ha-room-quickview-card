@@ -124,6 +124,13 @@ Das Pop-up lädt beim Öffnen einmal:
 
 ## Entwicklung
 
+Die Quellen liegen unter `src/`. `dist/room-quickview-card.js` ist ein Generat, das HACS ausliefert: nicht von Hand ändern, sondern nach jeder Änderung neu bauen und mit committen.
+
+```
+npm ci
+npm run build
+```
+
 `test/index.html` zeigt die Karte mit simulierten Home-Assistant-Daten. Weil ES-Module nicht über `file://` laden, braucht die Seite einen lokalen Webserver, zum Beispiel:
 
 ```
