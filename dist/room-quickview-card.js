@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Room Quickview Card
  *
  * Raumkarte fuer Home Assistant: Raumsymbol, Name, Temperatur, Luftfeuchte und
@@ -14,7 +14,7 @@
  * eingebettete Karten Theme und Kontext der Oberflaeche.
  */
 
-const CARD_VERSION = "0.4.1";
+const CARD_VERSION = "0.4.2";
 
 console.info(
   `%c ROOM-QUICKVIEW-CARD %c ${CARD_VERSION} `,
@@ -594,6 +594,17 @@ const POPUPSTILE = `
   .ghinweis { font-size: 0.78rem; color: var(--rsc-gedaempft); }
   .zusatz { grid-column: 1 / 4; }
   .regler { width: 100%; margin: 0; accent-color: var(--farbe); }
+  .reglerrahmen { position: relative; }
+  /* Folgt dem Knopf des Reglers und bleibt an den Enden innerhalb der Zeile */
+  .reglerwert {
+    position: absolute; z-index: 2; pointer-events: none; box-sizing: border-box;
+    bottom: calc(100% + 8px); min-width: 48px; padding: 3px 8px; border-radius: 8px;
+    left: clamp(24px, calc(8px + (100% - 16px) * var(--wert) / 100), calc(100% - 24px));
+    transform: translateX(-50%);
+    background: var(--rsc-karte); border: 1px solid color-mix(in srgb, var(--rsc-text) 18%, transparent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    font-size: 0.9rem; font-weight: 600; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
 
   .zwischentitel {
     margin: 6px 0 0; font-size: 0.8rem; color: var(--rsc-gedaempft);
@@ -909,11 +920,17 @@ class RoomQuickviewCardPopup extends HTMLElement {
     });
     // Waehrend der Regler gezogen wird, darf ein Neuzeichnen ihn nicht zuruecksetzen
     this.shadowRoot.addEventListener("pointerdown", (e) => {
-      if (e.target.classList.contains("regler")) this._zieht = true;
+      if (!e.target.classList.contains("regler")) return;
+      this._zieht = true;
+      this._reglerwertZeigen(e.target);
+    });
+    this.shadowRoot.addEventListener("input", (e) => {
+      if (this._zieht && e.target.classList.contains("regler")) this._reglerwertZeigen(e.target);
     });
     this._loslassenGebunden = () => {
       if (!this._zieht) return;
       this._zieht = false;
+      this._reglerwerteVerbergen();
       if (this._hass) this._aktualisieren();
     };
   }
@@ -1137,8 +1154,9 @@ class RoomQuickviewCardPopup extends HTMLElement {
     if (b.art === "rollladen") {
       zusatz = '<div class="zusatz">' + this._rollladenknoepfeHtml(b, index) +
         (typeof b.position === "number"
-          ? '<input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="5"' +
-            ' value="' + b.position + '" aria-label="Position ' + esc(b.name) + '">'
+          ? '<div class="reglerrahmen"><input type="range" class="regler" data-index="' + index + '" min="0" max="100" step="1"' +
+            ' value="' + b.position + '" aria-label="Position ' + esc(b.name) + '">' +
+            '<span class="reglerwert" aria-hidden="true" hidden></span></div>'
           : "") +
         "</div>";
     }
@@ -1317,8 +1335,20 @@ class RoomQuickviewCardPopup extends HTMLElement {
   _beiAenderung(e) {
     if (!e.target.classList.contains("regler")) return;
     this._zieht = false;
+    this._reglerwerteVerbergen();
     const geraet = this._config.devices[Number(e.target.dataset.index)];
     this._hass.callService("cover", "set_cover_position", { entity_id: geraet.entity, position: Number(e.target.value) });
+  }
+
+  _reglerwertZeigen(regler) {
+    const anzeige = regler.parentElement.querySelector(".reglerwert");
+    anzeige.textContent = regler.value + " %";
+    anzeige.style.setProperty("--wert", regler.value);
+    anzeige.hidden = false;
+  }
+
+  _reglerwerteVerbergen() {
+    this.shadowRoot.querySelectorAll(".reglerwert").forEach((anzeige) => { anzeige.hidden = true; });
   }
 
   _schalten(geraet) {
