@@ -1,4 +1,4 @@
-import { domaeneVon, esc, sprache, zahlText, leistungText, istSichtbar, bewerteGeraet, zustandHtml, chipMerkmale, chipKlassen } from "./bewertung.js";
+﻿import { domaeneVon, esc, sprache, zahlText, leistungText, istSichtbar, bewerteGeraet, zustandHtml, chipMerkmale, chipKlassen } from "./bewertung.js";
 import { STUNDEN_LEISTUNG, ABSCHNITTE_LEISTUNG, TAGE_ENERGIE, zeigtLeistungsverlauf, diagrammfarbe, abschnittsmaxima, tagesanfaenge, energieJeTag, abschnittssummen, flaechenSvg, tippHtml, stapelSvg } from "./diagramme.js";
 import { WEITERZUREICHENDE_EREIGNISSE } from "./konstanten.js";
 import { GEMEINSAME_STILE, POPUPSTILE } from "./stile.js";
@@ -8,6 +8,8 @@ export class RoomQuickviewCardPopup extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._zieht = false;
+    this._zeichnet = false;
+    this._nachzeichnen = false;
     this._signatur = "";
     this._beiTasteGebunden = (e) => {
       if (e.key === "Escape") this.schliessen();
@@ -88,6 +90,10 @@ export class RoomQuickviewCardPopup extends HTMLElement {
   // Neu gezeichnet wird nur, wenn sich eine beteiligte Entitaet geaendert hat
   _aktualisieren() {
     if (this._zieht) return;
+    if (this._zeichnet) {
+      this._nachzeichnen = true;
+      return;
+    }
     const signatur = this._config.devices
       .map((g) => [g.entity, g.power, g.show_when && (g.show_when.entity || g.show_when)]
         .filter(Boolean)
@@ -110,14 +116,25 @@ export class RoomQuickviewCardPopup extends HTMLElement {
     if (!hass || !c) return;
     if (!this.shadowRoot.querySelector(".popup")) this._geruestBauen();
 
-    c.devices.forEach((g, i) => {
-      const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
-      const sichtbar = istSichtbar(hass, g);
-      eintrag.hidden = !sichtbar;
-      eintrag.querySelector(".zeile").innerHTML = sichtbar ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : "";
-    });
+    // Wird der fokussierte Regler entfernt, feuert change. Kommt der neue Zustand darauf sofort,
+    // darf er hier kein zweites Zeichnen starten; es folgt nach dieser Schleife.
+    this._zeichnet = true;
+    try {
+      c.devices.forEach((g, i) => {
+        const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
+        const sichtbar = istSichtbar(hass, g);
+        eintrag.hidden = !sichtbar;
+        eintrag.querySelector(".zeile").innerHTML = sichtbar ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : "";
+      });
+    } finally {
+      this._zeichnet = false;
+    }
     this.shadowRoot.querySelector(".verlaeufe").innerHTML = this._verlaeufeHtml();
     this._diagrammeVerdrahten();
+    if (this._nachzeichnen) {
+      this._nachzeichnen = false;
+      this._aktualisieren();
+    }
   }
 
   // Je Geraet ein Eintrag aus Zeile und den Karten des Geraets; nur die Zeile wird neu gezeichnet

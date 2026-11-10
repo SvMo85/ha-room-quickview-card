@@ -750,6 +750,8 @@ var RoomQuickviewCardPopup = class extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._zieht = false;
+    this._zeichnet = false;
+    this._nachzeichnen = false;
     this._signatur = "";
     this._beiTasteGebunden = (e) => {
       if (e.key === "Escape") this.schliessen();
@@ -824,6 +826,10 @@ var RoomQuickviewCardPopup = class extends HTMLElement {
   // Neu gezeichnet wird nur, wenn sich eine beteiligte Entitaet geaendert hat
   _aktualisieren() {
     if (this._zieht) return;
+    if (this._zeichnet) {
+      this._nachzeichnen = true;
+      return;
+    }
     const signatur = this._config.devices.map((g) => [g.entity, g.power, g.show_when && (g.show_when.entity || g.show_when)].filter(Boolean).map((id) => {
       const s = this._hass.states[id];
       return s ? s.state + "@" + s.last_updated : "-";
@@ -839,14 +845,23 @@ var RoomQuickviewCardPopup = class extends HTMLElement {
     const c = this._config;
     if (!hass || !c) return;
     if (!this.shadowRoot.querySelector(".popup")) this._geruestBauen();
-    c.devices.forEach((g, i) => {
-      const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
-      const sichtbar = istSichtbar(hass, g);
-      eintrag.hidden = !sichtbar;
-      eintrag.querySelector(".zeile").innerHTML = sichtbar ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : "";
-    });
+    this._zeichnet = true;
+    try {
+      c.devices.forEach((g, i) => {
+        const eintrag = this.shadowRoot.querySelector('.eintrag[data-index="' + i + '"]');
+        const sichtbar = istSichtbar(hass, g);
+        eintrag.hidden = !sichtbar;
+        eintrag.querySelector(".zeile").innerHTML = sichtbar ? this._zeileHtml(g, bewerteGeraet(hass, g), i) : "";
+      });
+    } finally {
+      this._zeichnet = false;
+    }
     this.shadowRoot.querySelector(".verlaeufe").innerHTML = this._verlaeufeHtml();
     this._diagrammeVerdrahten();
+    if (this._nachzeichnen) {
+      this._nachzeichnen = false;
+      this._aktualisieren();
+    }
   }
   // Je Geraet ein Eintrag aus Zeile und den Karten des Geraets; nur die Zeile wird neu gezeichnet
   _geruestBauen() {
